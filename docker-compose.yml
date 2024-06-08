@@ -1,0 +1,29 @@
+version: '1'
+
+services:
+
+  backend:
+      build:
+          context: .
+          dockerfile: docker/backend/Dockerfile
+      container_name: backend
+      working_dir: /app/api
+      command: bash -c "python manage.py runserver"
+      volumes:
+      - ./:/app
+      ports:
+      - 8000:8000
+
+  frontend:
+    build:
+        context: .
+        dockerfile: docker/frontend/Dockerfile
+    depends_on:
+        - backend
+    container_name: frontend
+    working_dir: /www
+    command: bash -c "npm run dev"
+    volumes:
+      - ./frontend:/www
+    ports:
+      - 5173:5173

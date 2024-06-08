@@ -15,7 +15,56 @@ class ConfigManager:
             - file_path (str, optional): The path to the configuration file. Default is 'config.json'.
         """
         self.file_path = file_path
-        self.config = {}
+        false = False
+        true = True
+        self.config = {
+            "DEFAULT": {
+                "debug": false,
+                "log_file": "app.log",
+                "log_to_file": true,
+                "show_message": true,
+                "clean_console": true,
+                "root_path": "Video",
+                "map_episode_name": "%(tv_name)_S%(season)E%(episode)_%(episode_name)",
+                "not_close": false
+            },
+            "REQUESTS": {
+                "disable_error": false,
+                "timeout": 10,
+                "max_retry": 3,
+                "verify_ssl": false,
+                "index": {"user-agent": ""},
+                "segments": { "user-agent": ""}
+            },
+            "M3U8_DOWNLOAD": {
+                "tdqm_workers": 30,
+                "tqdm_use_large_bar": true,
+                "download_video": true,
+                "download_audio": true,
+                "merge_audio": true,
+                "specific_list_audio": ["ita"],
+                "download_sub": true,
+                "merge_subs": true,
+                "specific_list_subtitles": ["eng", "spa"],
+                "cleanup_tmp_folder": true,
+                "create_report": false
+            },
+            "M3U8_CONVERSION": {
+                "use_codec": false,
+                "use_gpu": false,
+                "default_preset": "ultrafast",
+                "check_output_after_ffmpeg": false
+            },
+            "M3U8_PARSER": {
+                "skip_empty_row_playlist": false,
+                "force_resolution": -1
+            },
+            "SITE": {
+                "streamingcommunity": "foo",
+                "animeunity": "to",
+                "altadefinizione": "food"
+            }
+        }
         self.cache = {}
 
     def read_config(self) -> None:
@@ -49,7 +98,7 @@ class ConfigManager:
         if section in self.config and key in self.config[section]:
             value = self.config[section][key]
         else:
-            raise ValueError(f"Key '{key}' not found in section '{section}'")
+            raise ValueError(f"Key '{key}' not found in section '{section}' in configuration file {self.config}.")
         
         value = self._convert_to_data_type(value, data_type)
         self.cache[cache_key] = value
