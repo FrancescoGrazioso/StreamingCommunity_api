@@ -33,19 +33,20 @@ TELEGRAM_BOT = config_manager.get_bool('DEFAULT', 'telegram_bot')
 
 
 
-def run_function(func: Callable[..., None], close_console: bool = False) -> None:
+def run_function(func: Callable[..., None], close_console: bool = False, search_terms: str = None) -> None:
     """
     Run a given function indefinitely or once, depending on the value of close_console.
 
     Parameters:
         func (Callable[..., None]): The function to run.
         close_console (bool, optional): Whether to close the console after running the function once. Defaults to False.
+        search_terms (str, optional): Search terms to use for the function. Defaults to None.
     """
     if close_console:
         while 1:
-            func()
+            func(search_terms)
     else:
-        func()
+        func(search_terms)
 
 
 def load_search_functions():
@@ -249,9 +250,11 @@ def main(script_id = 0):
         long_option = alias
         parser.add_argument(f'-{short_option}', f'--{long_option}', action='store_true', help=f'Search for {alias.split("_")[0]} on streaming platforms.')
 
+    parser.add_argument('-s', '--search', default=None, help='Search terms')
     # Parse command-line arguments
     args = parser.parse_args()
 
+    search_terms = args.search
     # Map command-line arguments to the config values
     config_updates = {}
 
@@ -283,7 +286,7 @@ def main(script_id = 0):
     # Check which argument is provided and run the corresponding function
     for arg, func in arg_to_function.items():
         if getattr(args, arg):
-            run_function(func)
+            run_function(func, search_terms=search_terms)
             return
 
     # Mapping user input to functions
@@ -336,7 +339,7 @@ def main(script_id = 0):
 
     # Run the corresponding function based on user input
     if category in input_to_function:
-        run_function(input_to_function[category])
+        run_function(input_to_function[category], search_terms = args.search)
     else:
 
         if TELEGRAM_BOT:
