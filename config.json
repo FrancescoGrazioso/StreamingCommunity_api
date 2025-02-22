@@ -6,7 +6,7 @@
         "show_message": true,
         "clean_console": true,
         "show_trending": true,
-        "root_path": "../media_plex",
+        "root_path": "Video",
         "movie_folder_name": "Movie",
         "serie_folder_name": "Serie",
         "anime_folder_name": "Anime",
