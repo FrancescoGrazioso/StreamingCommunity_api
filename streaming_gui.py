@@ -107,6 +107,22 @@ class StreamingGUI(QMainWindow):
         self.output_text.setReadOnly(True)
         output_layout.addWidget(self.output_text)
 
+        # add input layout
+        input_layout = QHBoxLayout()
+        self.input_field = QLineEdit()
+        self.input_field.setPlaceholderText("Inserisci l'indice del media...")
+        self.input_field.returnPressed.connect(self.send_input)
+        self.send_button = QPushButton("Invia")
+        self.send_button.clicked.connect(self.send_input)
+
+        # initially hide input layout
+        self.input_field.hide()
+        self.send_button.hide()
+
+        input_layout.addWidget(self.input_field)
+        input_layout.addWidget(self.send_button)
+        output_layout.addLayout(input_layout)
+
         output_group.setLayout(output_layout)
         run_layout.addWidget(output_group)
 
@@ -173,6 +189,25 @@ class StreamingGUI(QMainWindow):
         stdout = bytes(data).decode("utf8", errors="replace")
         self.update_output(stdout)
 
+        # show input controls when prompted an insert
+        if "Insert" in stdout:
+            self.input_field.show()
+            self.send_button.show()
+            self.input_field.setFocus()
+
+            # check that output has scroll to bottom
+            self.output_text.verticalScrollBar().setValue(
+                self.output_text.verticalScrollBar().maximum()
+            )
+
+    def send_input(self):
+        if self.process and self.process.state() == QProcess.Running:
+            user_input = self.input_field.text() + "\n"
+            self.process.write(user_input.encode())
+            self.input_field.clear()
+            self.input_field.hide()
+            self.send_button.hide()
+
     def handle_stderr(self):
         data = self.process.readAllStandardError()
         stderr = bytes(data).decode("utf8", errors="replace")
@@ -181,6 +216,8 @@ class StreamingGUI(QMainWindow):
     def process_finished(self):
         self.run_button.setEnabled(True)
         self.stop_button.setEnabled(False)
+        self.input_field.hide()
+        self.send_button.hide()
         print("Script terminato.")
 
     def update_output(self, text):
