@@ -26,7 +26,7 @@ for alias, (_, use_for) in search_functions.items():
 
 
 class Stream(QObject):
-    """Reindirizza l'output dello script alla GUI"""
+    """Redirect script output to GUI"""
 
     newText = pyqtSignal(str)
 
@@ -41,12 +41,12 @@ class StreamingGUI(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # Processo per eseguire lo script
+        # process to start script
         self.process = None
 
         self.init_ui()
 
-        # Reindirizzamento dell'output
+        # output redirect
         self.stdout_stream = Stream()
         self.stdout_stream.newText.connect(self.update_output)
         sys.stdout = self.stdout_stream
@@ -55,18 +55,17 @@ class StreamingGUI(QMainWindow):
         self.setWindowTitle("StreamingCommunity GUI")
         self.setGeometry(100, 100, 1000, 700)
 
-        # Widget e layout principale
+        # widget and main layout
         central_widget = QWidget()
         main_layout = QVBoxLayout()
 
-        # Crea un widget a schede
+        # tabs widget
         tab_widget = QTabWidget()
 
-        # Scheda 1: Esecuzione script
         run_tab = QWidget()
         run_layout = QVBoxLayout()
 
-        # Gruppo per i parametri di ricerca
+        # search parameters group
         search_group = QGroupBox("Parametri di Ricerca")
         search_layout = QFormLayout()
 
@@ -80,14 +79,13 @@ class StreamingGUI(QMainWindow):
             self.site_combo.setItemData(site["index"], site["flag"], Qt.ToolTipRole)
         if self.site_combo.count() > 0:
             self.site_combo.setCurrentIndex(0)
-        # Qui dovresti popolare il combobox con i siti disponibili
-        # Per ora lo lascio vuoto, ma andrebbe riempito dinamicamente
+
         search_layout.addRow("Seleziona sito:", self.site_combo)
 
         search_group.setLayout(search_layout)
         run_layout.addWidget(search_group)
 
-        # Bottoni di controllo
+        # control buttons
         control_layout = QHBoxLayout()
 
         self.run_button = QPushButton("Esegui Script")
@@ -101,7 +99,7 @@ class StreamingGUI(QMainWindow):
 
         run_layout.addLayout(control_layout)
 
-        # Area di output
+        # output area
         output_group = QGroupBox("Output")
         output_layout = QVBoxLayout()
 
@@ -125,26 +123,25 @@ class StreamingGUI(QMainWindow):
             print("Script già in esecuzione.")
             return
 
-        # Costruisci la command line con gli argomenti
+        # build command line args
         args = []
 
-        # Aggiungi i termini di ricerca
+        # add search terms
         search_terms = self.search_terms.text()
         if search_terms:
             args.extend(["-s", search_terms])
 
-        # Aggiungi il sito selezionato se presente
+        # add site if present
         site_index = self.site_combo.currentIndex()
         if site_index >= 0:
             site_text = sites[site_index]["flag"]
-            # Assumo che il nome del sito sia il primo elemento del testo
             site_name = site_text.split()[0].upper()
             args.append(f"-{site_name}")
 
         self.output_text.clear()
         print(f"Avvio script con argomenti: {' '.join(args)}")
 
-        # Creiamo e avviamo il processo
+        # create and start process
         self.process = QProcess()
         self.process.readyReadStandardOutput.connect(self.handle_stdout)
         self.process.readyReadStandardError.connect(self.handle_stderr)
@@ -155,19 +152,19 @@ class StreamingGUI(QMainWindow):
 
         self.process.start(python_executable, [script_path] + args)
 
-        # Aggiorna lo stato dei pulsanti
+        # Update button state
         self.run_button.setEnabled(False)
         self.stop_button.setEnabled(True)
 
     def stop_script(self):
         if self.process is not None and self.process.state() == QProcess.Running:
             self.process.terminate()
-            # Attendi che si chiuda (con timeout)
+            # Wait for close (with timeout)
             if not self.process.waitForFinished(3000):
                 self.process.kill()
             print("Script terminato.")
 
-            # Aggiorna lo stato dei pulsanti
+            # Update button state
             self.run_button.setEnabled(True)
             self.stop_button.setEnabled(False)
 
@@ -194,7 +191,7 @@ class StreamingGUI(QMainWindow):
         self.output_text.ensureCursorVisible()
 
     def closeEvent(self, event):
-        # Fermae qualsiasi processo in esecuzione prima di chiudere
+        # Stop all process
         if self.process is not None and self.process.state() == QProcess.Running:
             self.process.terminate()
             if not self.process.waitForFinished(1000):
