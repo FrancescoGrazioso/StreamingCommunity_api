@@ -197,7 +197,7 @@ class StreamingGUI(QMainWindow):
             if not self.process.waitForFinished(1000):
                 self.process.kill()
 
-        # Ripristina stdout
+        # Restore stdout
         sys.stdout = sys.__stdout__
 
         event.accept()
