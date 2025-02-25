@@ -1,8 +1,18 @@
 import sys
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
-                             QHBoxLayout, QLineEdit, QPushButton,
-                             QComboBox, QTabWidget, QTextEdit, QGroupBox,
-                             QFormLayout)
+from PyQt5.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QComboBox,
+    QTabWidget,
+    QTextEdit,
+    QGroupBox,
+    QFormLayout,
+)
 from PyQt5.QtCore import Qt, QProcess, pyqtSignal, QObject
 
 from StreamingCommunity.run import load_search_functions
@@ -10,10 +20,14 @@ from StreamingCommunity.run import load_search_functions
 search_functions = load_search_functions()
 sites = []
 for alias, (_, use_for) in search_functions.items():
-    sites.append({"index": len(sites), "name": alias.split("_")[0], "flag": alias[:3].upper()})
+    sites.append(
+        {"index": len(sites), "name": alias.split("_")[0], "flag": alias[:3].upper()}
+    )
+
 
 class Stream(QObject):
     """Reindirizza l'output dello script alla GUI"""
+
     newText = pyqtSignal(str)
 
     def write(self, text):
@@ -62,8 +76,8 @@ class StreamingGUI(QMainWindow):
         self.site_combo = QComboBox()
 
         for site in sites:
-            self.site_combo.addItem(f"{site['name']}", site['index'])
-            self.site_combo.setItemData(site['index'], site['flag'], Qt.ToolTipRole)
+            self.site_combo.addItem(f"{site['name']}", site["index"])
+            self.site_combo.setItemData(site["index"], site["flag"], Qt.ToolTipRole)
         if self.site_combo.count() > 0:
             self.site_combo.setCurrentIndex(0)
         # Qui dovresti popolare il combobox con i siti disponibili
@@ -106,7 +120,6 @@ class StreamingGUI(QMainWindow):
         central_widget.setLayout(main_layout)
         self.setCentralWidget(central_widget)
 
-
     def run_script(self):
         if self.process is not None and self.process.state() == QProcess.Running:
             print("Script già in esecuzione.")
@@ -118,15 +131,15 @@ class StreamingGUI(QMainWindow):
         # Aggiungi i termini di ricerca
         search_terms = self.search_terms.text()
         if search_terms:
-            args.extend(['-s', search_terms])
+            args.extend(["-s", search_terms])
 
         # Aggiungi il sito selezionato se presente
         site_index = self.site_combo.currentIndex()
         if site_index >= 0:
-            site_text = sites[site_index]['flag']
+            site_text = sites[site_index]["flag"]
             # Assumo che il nome del sito sia il primo elemento del testo
             site_name = site_text.split()[0].upper()
-            args.append(f'-{site_name}')
+            args.append(f"-{site_name}")
 
         self.output_text.clear()
         print(f"Avvio script con argomenti: {' '.join(args)}")
@@ -160,12 +173,12 @@ class StreamingGUI(QMainWindow):
 
     def handle_stdout(self):
         data = self.process.readAllStandardOutput()
-        stdout = bytes(data).decode('utf8', errors='replace')
+        stdout = bytes(data).decode("utf8", errors="replace")
         self.update_output(stdout)
 
     def handle_stderr(self):
         data = self.process.readAllStandardError()
-        stderr = bytes(data).decode('utf8', errors='replace')
+        stderr = bytes(data).decode("utf8", errors="replace")
         self.update_output(stderr)
 
     def process_finished(self):
@@ -193,7 +206,7 @@ class StreamingGUI(QMainWindow):
         event.accept()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     app = QApplication(sys.argv)
     gui = StreamingGUI()
     gui.show()
