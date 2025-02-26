@@ -118,6 +118,7 @@ class RunTab(QTabWidget):
 
     def toggle_console(self, state):
         self.output_text.setVisible(state == Qt.Checked)
+        self.results_table.setVisible(state == Qt.Checked)
 
     def run_script(self):
         if self.process is not None and self.process.state() == QProcess.Running:
