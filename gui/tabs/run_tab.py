@@ -25,6 +25,7 @@ class RunTab(QTabWidget):
         self.process = None
         self.current_context = None
         self.selected_season = None
+        self.buffer = ""
         self.init_ui()
 
     def init_ui(self):
@@ -125,6 +126,7 @@ class RunTab(QTabWidget):
 
         self.current_context = None
         self.selected_season = None
+        self.buffer = ""
         self.results_table.setVisible(False)
         self.status_label.setText("Richiesta in corso...")
         self.status_label.show()
@@ -160,25 +162,30 @@ class RunTab(QTabWidget):
         stdout = bytes(data).decode("utf8", errors="replace")
         self.update_output(stdout)
 
-        if "Seasons found:" in stdout:
-            self.current_context = "seasons"
-            self.input_field.setPlaceholderText(
-                "Inserisci il numero della stagione (es: 1, *, 1-2, 3-*)"
-            )
-        elif "Episodes find:" in stdout:
+        self.buffer += stdout
+
+        if "Episodes find:" in self.buffer:
             self.current_context = "episodes"
             self.input_field.setPlaceholderText(
                 "Inserisci l'indice dell'episodio (es: 1, *, 1-2, 3-*)"
             )
+        elif "Seasons found:" in self.buffer:
+            self.current_context = "seasons"
+            self.input_field.setPlaceholderText(
+                "Inserisci il numero della stagione (es: 1, *, 1-2, 3-*)"
+            )
 
-        if "┏━━━━━━━┳" in stdout or "Seasons found:" in stdout:
-            self.parse_and_show_results(stdout)
-        elif "Episodes find:" in stdout:
+        if "Episodes find:" in self.buffer:
             self.results_table.hide()
-            self.status_label.setText(stdout)
+            self.current_context = "episodes"
+            text_to_show = f"Trovati {self.buffer.split("Episodes find:")[1].split()[0]} episodi!"
+            self.status_label.setText(text_to_show)
             self.status_label.show()
+        elif (("┏" in self.buffer or "┌" in self.buffer) and
+                ("┗" in self.buffer or "┛" in self.buffer or "└" in self.buffer)) or "Seasons found:" in self.buffer:
+            self.parse_and_show_results(self.buffer)
 
-        if "Insert" in stdout:
+        if "Insert" in self.buffer:
             self.input_field.show()
             self.send_button.show()
             self.input_field.setFocus()
@@ -187,16 +194,26 @@ class RunTab(QTabWidget):
             )
 
     def parse_and_show_results(self, text):
-        if "Seasons found:" in text:
+        if "Seasons found:" in text and not "Insert media index (e.g., 1)" in text:
             self.status_label.hide()
             num_seasons = int(text.split("Seasons found:")[1].split()[0])
             self.results_table.update_with_seasons(num_seasons)
             return
 
-        if "┏━━━━━━━┳" in text and "└───────┴" in text:
+        if ("┏━━━━━━━┳" in text or "┌───────┬" in text) and "└───────┴" in text:
+            chars_to_find = []
+            if "┏" in text:
+                chars_to_find.append("┏")
+                chars_to_find.append("┃")
+            elif "┌" in text:
+                chars_to_find.append("┌")
+                chars_to_find.append("│")
+
+            if not chars_to_find or len(chars_to_find) == 0:
+                return
             self.status_label.hide()
-            table_lines = text[text.find("┏") : text.find("└")].split("\n")
-            headers = [h.strip() for h in table_lines[1].split("┃")[1:-1]]
+            table_lines = text[text.find(chars_to_find[0]) : text.find("└")].split("\n")
+            headers = [h.strip() for h in table_lines[1].split(chars_to_find[1])[1:-1]]
 
             rows = []
             for line in table_lines[3:]:
