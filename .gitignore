@@ -49,3 +49,5 @@ cmd.txt
 bot_config.json
 scripts.json
 active_requests.json
+.idea/
+.vscode/

@@ -179,7 +179,7 @@ class RunTab(QTabWidget):
         if "Episodes find:" in self.buffer:
             self.results_table.hide()
             self.current_context = "episodes"
-            text_to_show = f"Trovati {self.buffer.split("Episodes find:")[1].split()[0]} episodi!"
+            text_to_show = f"Trovati {self.buffer.split('Episodes find:')[1].split()[0]} episodi!"
             self.status_label.setText(text_to_show)
             self.status_label.show()
         elif (("┏" in self.buffer or "┌" in self.buffer) and
