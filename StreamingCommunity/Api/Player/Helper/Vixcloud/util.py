@@ -8,14 +8,13 @@ class Episode:
         self.data = data
 
         self.id: int = data.get('id', 0)
-        self.scws_id: int = data.get('scws_id', 0)
         self.number: int = data.get('number', 1)
         self.name: str = data.get('name', '')
-        self.plot: str = data.get('plot', '')
         self.duration: int = data.get('duration', 0)
+        self.url: str = data.get('url', '')
 
     def __str__(self):
-        return f"Episode(id={self.id}, number={self.number}, name='{self.name}', plot='{self.plot}', duration={self.duration} sec)"
+        return f"Episode(id={self.id}, number={self.number}, name='{self.name}', duration={self.duration} sec)"
 
 class EpisodeManager:
     def __init__(self):
@@ -37,72 +36,70 @@ class EpisodeManager:
 
         Parameters:
             - index (int): The zero-based index of the episode to retrieve.
-
-        Returns:
-            Episode: The Episode object at the specified index.
         """
         return self.episodes[index]
-    
-    def length(self) -> int:
-        """
-        Get the number of episodes in the manager.
-
-        Returns:
-            int: Number of episodes.
-        """
-        return len(self.episodes)
     
     def clear(self) -> None:
         """
         This method clears the episodes list.
-
-        Parameters:
-            - self: The object instance.
         """
         self.episodes.clear()
+
+    def __len__(self) -> int:
+        """
+        Get the number of episodes in the manager.
+        """
+        return len(self.episodes)
 
     def __str__(self):
         return f"EpisodeManager(num_episodes={len(self.episodes)})"
 
 
-class SeasonData:
+class Season:
     def __init__(self, data: Dict[str, Any]):
         self.id: int = data.get('id', 0)
         self.number: int = data.get('number', 0)
+        self.name: str = data.get('name', '')
+        self.slug: str = data.get('slug', '')
+        self.type: str = data.get('type', '')
+        self.episodes: EpisodeManager = EpisodeManager()
 
     def __str__(self):
-        return f"SeasonData(id={self.id}, number={self.number}, name='{self.name}'"
+        return f"Season(id={self.id}, number={self.number}, name='{self.name}', episodes={self.episodes.length()})"
+
 
 class SeasonManager:
     def __init__(self):
-        self.seasons: List[SeasonData] = []
+        self.seasons: List[Season] = []
     
-    def add_season(self, season_data):
-        season = SeasonData(season_data)
+    def add_season(self, season_data: Dict[str, Any]) -> Season:
+        """
+        Add a new season to the manager and return it.
+        
+        Parameters:
+            - season_data (Dict[str, Any]): A dictionary containing data for the new season.
+        """
+        season = Season(season_data)
         self.seasons.append(season)
+        return season
         
-    def get_season_by_number(self, number: int) -> Optional[Dict]:
-        return self.seasons[number]
-
-class Season:
-    def __init__(self, season_data: Dict[str, Union[int, str, None]]):
-        self.season_data = season_data
-
-        self.id: int = season_data.get('id', 0)
-        self.scws_id: int = season_data.get('scws_id', 0)
-        self.imdb_id: int = season_data.get('imdb_id', 0)
-        self.number: int = season_data.get('number', 0)
-        self.name: str = season_data.get('name', '')
-        self.slug: str = season_data.get('slug', '')
-        self.plot: str = season_data.get('plot', '')
-        self.type: str = season_data.get('type', '')
-        self.seasons_count: int = season_data.get('seasons_count', 0)
+    def get_season_by_number(self, number: int) -> Optional[Season]:
+        """
+        Get a season by its number.
         
-        self.episodes: EpisodeManager = EpisodeManager()
-
-        self.seasonsData: SeasonManager = SeasonManager()
-        for element in season_data['seasons']:
-            self.seasonsData.add_season(element)
+        Parameters:
+            - number (int): The season number (1-based index)
+        """
+        for season in self.seasons:
+            if season.number == number:
+                return season
+        return None
+    
+    def __len__(self) -> int:
+        """
+        Return the number of seasons managed.
+        """
+        return len(self.seasons)
         
 
 class Stream:

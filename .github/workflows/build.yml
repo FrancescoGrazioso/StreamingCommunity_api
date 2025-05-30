@@ -1,4 +1,4 @@
-name: Build or Publish
+name: Build and Publish
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ on:
 
 jobs:
   publish:
-    if: startsWith(github.ref_name, 'v') && github.event.inputs.publish_pypi == 'true'
+    if: startsWith(github.ref_name, 'v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_pypi == 'true')
     runs-on: ubuntu-latest
 
     steps:
@@ -33,15 +33,15 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install packaging dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install setuptools wheel twine
+          python -m pip install --upgrade setuptools>=61.0.0 wheel twine build
 
       - name: Build package
-        run: python setup.py sdist bdist_wheel
+        run: python -m build
 
       - name: Upload to PyPI
         env:
@@ -50,10 +50,31 @@ jobs:
         run: twine upload dist/*
 
   build:
-    if: startsWith(github.ref_name, 'v') && github.event.inputs.publish_pypi == 'false'
+    if: startsWith(github.ref_name, 'v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_pypi == 'false')
+
     strategy:
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            artifact_name: StreamingCommunity_win
+            executable: StreamingCommunity_win.exe
+            separator: ';'
+
+          - os: macos-latest
+            artifact_name: StreamingCommunity_mac
+            executable: StreamingCommunity_mac
+            separator: ':'
+
+          - os: ubuntu-latest
+            artifact_name: StreamingCommunity_linux_latest
+            executable: StreamingCommunity_linux_latest
+            separator: ':'
+
+          - os: ubuntu-22.04
+            artifact_name: StreamingCommunity_linux_previous
+            executable: StreamingCommunity_linux_previous
+            separator: ':'
+
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -72,88 +93,49 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
+          python -m pip install --upgrade certifi
           python -m pip install -r requirements.txt
           python -m pip install pyinstaller
 
-      - name: Build executable with PyInstaller (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          pyinstaller --onefile --hidden-import=pycryptodomex --hidden-import=ua_generator `
-            --hidden-import=qbittorrentapi --hidden-import=qbittorrent `
-            --hidden-import=bs4 --hidden-import=httpx --hidden-import=rich --hidden-import=tqdm `
-            --hidden-import=m3u8 --hidden-import=psutil --hidden-import=unidecode `
-            --hidden-import=jsbeautifier --hidden-import=six --hidden-import=pathvalidate `
-            --hidden-import=Cryptodome.Cipher --hidden-import=Cryptodome.Cipher.AES `
-            --hidden-import=Cryptodome.Util --hidden-import=Cryptodome.Util.Padding `
-            --hidden-import=Cryptodome.Random --hidden-import=Pillow `
-            --hidden-import=pyTelegramBotAPI --additional-hooks-dir=pyinstaller/hooks `
-            --add-data "StreamingCommunity;StreamingCommunity" `
-            --name=StreamingCommunity_win --icon=".github/media/logo.ico" test_run.py
-
-      - name: Build executable with PyInstaller (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Build executable with PyInstaller
+        shell: bash
         run: |
           pyinstaller --onefile --hidden-import=pycryptodomex --hidden-import=ua_generator \
             --hidden-import=qbittorrentapi --hidden-import=qbittorrent \
             --hidden-import=bs4 --hidden-import=httpx --hidden-import=rich --hidden-import=tqdm \
             --hidden-import=m3u8 --hidden-import=psutil --hidden-import=unidecode \
-            --hidden-import=jsbeautifier --hidden-import=six --hidden-import=pathvalidate \
+            --hidden-import=jsbeautifier --hidden-import=jsbeautifier.core \
+            --hidden-import=jsbeautifier.javascript --hidden-import=jsbeautifier.javascript.beautifier \
+            --hidden-import=jsbeautifier.unpackers --hidden-import=jsbeautifier.unpackers.packer \
+            --hidden-import=jsbeautifier.unpackers.javascriptobfuscator \
+            --hidden-import=jsbeautifier.unpackers.myobfuscate \
+            --hidden-import=jsbeautifier.unpackers.urlencode \
+            --hidden-import=jsbeautifier.unpackers.meshim \
+            --hidden-import=editorconfig --hidden-import=editorconfig.handlers \
+            --hidden-import=six --hidden-import=pathvalidate \
             --hidden-import=Cryptodome.Cipher --hidden-import=Cryptodome.Cipher.AES \
             --hidden-import=Cryptodome.Util --hidden-import=Cryptodome.Util.Padding \
-            --hidden-import=Cryptodome.Random --hidden-import=Pillow \
-            --hidden-import=pyTelegramBotAPI --additional-hooks-dir=pyinstaller/hooks \
-            --add-data "StreamingCommunity:StreamingCommunity" \
-            --name=StreamingCommunity_linux test_run.py
+            --hidden-import=Cryptodome.Random \
+            --hidden-import=telebot \
+            --additional-hooks-dir=pyinstaller/hooks \
+            --add-data "StreamingCommunity${{ matrix.separator }}StreamingCommunity" \
+            --name=${{ matrix.artifact_name }} test_run.py
 
-      - name: Build executable with PyInstaller (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          pyinstaller --onefile --hidden-import=pycryptodomex --hidden-import=ua_generator \
-            --hidden-import=qbittorrentapi --hidden-import=qbittorrent \
-            --hidden-import=bs4 --hidden-import=httpx --hidden-import=rich --hidden-import=tqdm \
-            --hidden-import=m3u8 --hidden-import=psutil --hidden-import=unidecode \
-            --hidden-import=jsbeautifier --hidden-import=six --hidden-import=pathvalidate \
-            --hidden-import=Cryptodome.Cipher --hidden-import=Cryptodome.Cipher.AES \
-            --hidden-import=Cryptodome.Util --hidden-import=Cryptodome.Util.Padding \
-            --hidden-import=Cryptodome.Random --hidden-import=Pillow \
-            --hidden-import=pyTelegramBotAPI --additional-hooks-dir=pyinstaller/hooks \
-            --add-data "StreamingCommunity:StreamingCommunity" \
-            --name=StreamingCommunity_mac test_run.py
-            
-      - name: Upload executable (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
-          name: StreamingCommunity_win
-          path: dist/StreamingCommunity_win.exe
-
-      - name: Upload executable (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: StreamingCommunity_linux
-          path: dist/StreamingCommunity_linux
-
-      - name: Upload executable (macOS)
-        if: matrix.os == 'macos-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: StreamingCommunity_mac
-          path: dist/StreamingCommunity_mac
+          name: ${{ matrix.artifact_name }}
+          path: dist/${{ matrix.executable }}
 
       - name: Create or update release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ env.latest_tag }}
-          files: |
-            dist/StreamingCommunity_win.exe
-            dist/StreamingCommunity_linux
-            dist/StreamingCommunity_mac
+          files: dist/${{ matrix.executable }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

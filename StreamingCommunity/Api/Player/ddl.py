@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 
 # Internal utilities
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 from StreamingCommunity.Util.headers import get_userAgent
 
 
@@ -18,21 +18,13 @@ max_timeout = config_manager.get_int("REQUESTS", "timeout")
 
 
 class VideoSource:
-    def __init__(self, cookie) -> None:
+    def __init__(self, url, cookie) -> None:
         """
         Initializes the VideoSource object with default values.
         """
         self.headers = {'user-agent': get_userAgent()}
-        self.cookie = cookie
-
-    def setup(self, url: str) -> None:
-        """
-        Sets up the video source with the provided URL.
-
-        Parameters:
-            - url (str): The URL of the video source.
-        """
         self.url = url
+        self.cookie = cookie
 
     def make_request(self, url: str) -> str:
         """

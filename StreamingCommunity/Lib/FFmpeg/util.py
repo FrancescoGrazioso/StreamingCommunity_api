@@ -8,14 +8,16 @@ import logging
 from typing import Tuple
 
 
+# External library
+from rich.console import Console
+
+
 # Internal utilities
-from StreamingCommunity.Util.console import console
-from StreamingCommunity.Util.os import os_summary
+from StreamingCommunity.Util.os import get_ffprobe_path
 
 
 # Variable
-FFPROB_PATH = os_summary.ffprobe_path
-
+console = Console()
 
 
 def has_audio_stream(video_path: str) -> bool:
@@ -29,7 +31,7 @@ def has_audio_stream(video_path: str) -> bool:
         has_audio (bool): True if the input video has an audio stream, False otherwise.
     """
     try:
-        ffprobe_cmd = [FFPROB_PATH, '-v', 'error', '-print_format', 'json', '-select_streams', 'a', '-show_streams', video_path]
+        ffprobe_cmd = [get_ffprobe_path(), '-v', 'error', '-print_format', 'json', '-select_streams', 'a', '-show_streams', video_path]
         logging.info(f"FFmpeg command: {ffprobe_cmd}")
 
         with subprocess.Popen(ffprobe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) as proc:
@@ -55,9 +57,8 @@ def get_video_duration(file_path: str) -> float:
     Returns:
         (float): The duration of the video in seconds if successful, None if there's an error.
     """
-
     try:
-        ffprobe_cmd = [FFPROB_PATH, '-v', 'error', '-show_format', '-print_format', 'json', file_path]
+        ffprobe_cmd = [get_ffprobe_path(), '-v', 'error', '-show_format', '-print_format', 'json', file_path]
         logging.info(f"FFmpeg command: {ffprobe_cmd}")
 
         # Use a with statement to ensure the subprocess is cleaned up properly
@@ -83,37 +84,6 @@ def get_video_duration(file_path: str) -> float:
         sys.exit(0)
 
 
-def get_video_duration_s(filename):
-    """
-    Get the duration of a video file using ffprobe.
-
-    Parameters:
-        - filename (str): Path to the video file (e.g., 'sim.mp4')
-
-    Returns:
-        - duration (float): Duration of the video in seconds, or None if an error occurs.
-    """
-    ffprobe_cmd = ['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', filename]
-
-    try:
-        
-        # Run ffprobe command and capture output
-        result = subprocess.run(ffprobe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
-        
-        # Extract duration from the output
-        duration_str = result.stdout.strip()
-        duration = float(duration_str)  # Convert duration to float
-        
-        return int(duration)
-    
-    except subprocess.CalledProcessError as e:
-        print(f"Error running ffprobe: {e}")
-        return None
-    except ValueError as e:
-        print(f"Error converting duration to float: {e}")
-        return None
-
-
 def format_duration(seconds: float) -> Tuple[int, int, int]:
     """
     Format duration in seconds into hours, minutes, and seconds.
@@ -124,7 +94,6 @@ def format_duration(seconds: float) -> Tuple[int, int, int]:
     Returns:
         list[int, int, int]: List containing hours, minutes, and seconds.
     """
-
     hours, remainder = divmod(seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
 
@@ -163,35 +132,66 @@ def print_duration_table(file_path: str, description: str = "Duration", return_s
 def get_ffprobe_info(file_path):
     """
     Get format and codec information for a media file using ffprobe.
-
     Parameters:
         - file_path (str): Path to the media file.
-
     Returns:
         dict: A dictionary containing the format name and a list of codec names.
+              Returns None if file does not exist or ffprobe crashes.
     """
-    try:
-        result = subprocess.run(
-            [FFPROB_PATH, '-v', 'error', '-show_format', '-show_streams', '-print_format', 'json', file_path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True
-        )
-        output = result.stdout
-        info = json.loads(output)
-        
-        format_name = info['format']['format_name'] if 'format' in info else None
-        codec_names = [stream['codec_name'] for stream in info['streams']] if 'streams' in info else []
-        
-        return {
-            'format_name': format_name,
-            'codec_names': codec_names
-        }
-    
-    except subprocess.CalledProcessError as e:
-        logging.error(f"ffprobe failed for file {file_path}: {e}")
+    if not os.path.exists(file_path):
+        logging.error(f"File not found: {file_path}")
         return None
-    
-    except json.JSONDecodeError as e:
-        logging.error(f"Failed to parse JSON output from ffprobe for file {file_path}: {e}")
+
+    # Get ffprobe path and verify it exists
+    ffprobe_path = get_ffprobe_path()
+    if not ffprobe_path or not os.path.exists(ffprobe_path):
+        logging.error(f"FFprobe not found at path: {ffprobe_path}")
+        return None
+
+    # Verify file permissions
+    try:
+        file_stat = os.stat(file_path)
+        logging.info(f"File permissions: {oct(file_stat.st_mode)}")
+        if not os.access(file_path, os.R_OK):
+            logging.error(f"No read permission for file: {file_path}")
+            return None
+    except OSError as e:
+        logging.error(f"Cannot access file {file_path}: {e}")
+        return None
+
+    try:
+        cmd = [ffprobe_path, '-v', 'error', '-show_format', '-show_streams', '-print_format', 'json', file_path]
+        logging.info(f"Running FFprobe command: {' '.join(cmd)}")
+        
+        # Use subprocess.run instead of Popen for better error handling
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False  # Don't raise exception on non-zero exit
+        )
+
+        if result.returncode != 0:
+            logging.error(f"FFprobe failed with return code {result.returncode}")
+            logging.error(f"FFprobe stderr: {result.stderr}")
+            logging.error(f"FFprobe stdout: {result.stdout}")
+            logging.error(f"Command: {' '.join(cmd)}")
+            logging.error(f"FFprobe path permissions: {oct(os.stat(ffprobe_path).st_mode)}")
+            return None
+
+        # Parse JSON output
+        try:
+            info = json.loads(result.stdout)
+            return {
+                'format_name': info.get('format', {}).get('format_name'),
+                'codec_names': [stream.get('codec_name') for stream in info.get('streams', [])]
+            }
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse FFprobe output: {e}")
+            return None
+
+    except Exception as e:
+        logging.error(f"FFprobe execution failed: {e}")
         return None
 
 
@@ -208,8 +208,11 @@ def is_png_format_or_codec(file_info):
     if not file_info:
         return False
     
-    #console.print(f"[yellow][FFmpeg] [cyan]Avaiable codec[white]: [red]{file_info['codec_names']}")
-    return file_info['format_name'] == 'png_pipe' or 'png' in file_info['codec_names']
+    # Handle None values in format_name gracefully
+    format_name = file_info.get('format_name')
+    codec_names = file_info.get('codec_names', [])
+    
+    return format_name == 'png_pipe' or 'png' in codec_names
 
 
 def need_to_force_to_ts(file_path):
@@ -227,23 +230,37 @@ def need_to_force_to_ts(file_path):
     return False
 
 
-def check_duration_v_a(video_path, audio_path):
+def check_duration_v_a(video_path, audio_path, tolerance=1.0):
     """
     Check if the duration of the video and audio matches.
 
     Parameters:
         - video_path (str): Path to the video file.
         - audio_path (str): Path to the audio file.
+        - tolerance (float): Allowed tolerance for the duration difference (in seconds).
 
     Returns:
-        - bool: True if the duration of the video and audio matches, False otherwise.
+        - tuple: (bool, float) -> True if the duration of the video and audio matches, False otherwise, along with the difference in duration.
     """
-    
-    # Ottieni la durata del video
     video_duration = get_video_duration(video_path)
-    
-    # Ottieni la durata dell'audio
     audio_duration = get_video_duration(audio_path)
 
-    # Verifica se le durate corrispondono
-    return video_duration == audio_duration
+    # Check if either duration is None and specify which one is None
+    if video_duration is None and audio_duration is None:
+        console.print("[yellow]Warning: Both video and audio durations are None. Returning 0 as duration difference.[/yellow]")
+        return False, 0.0
+    elif video_duration is None:
+        console.print("[yellow]Warning: Video duration is None. Returning 0 as duration difference.[/yellow]")
+        return False, 0.0
+    elif audio_duration is None:
+        console.print("[yellow]Warning: Audio duration is None. Returning 0 as duration difference.[/yellow]")
+        return False, 0.0
+
+    # Calculate the duration difference
+    duration_difference = abs(video_duration - audio_duration)
+
+    # Check if the duration difference is within the tolerance
+    if duration_difference <= tolerance:
+        return True, duration_difference
+    else:
+        return False, duration_difference

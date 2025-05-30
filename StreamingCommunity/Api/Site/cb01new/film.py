@@ -3,8 +3,11 @@
 import os
 
 
+# External library
+from rich.console import Console
+
+
 # Internal utilities
-from StreamingCommunity.Util.console import console
 from StreamingCommunity.Util.os import os_manager
 from StreamingCommunity.Util.message import start_message
 from StreamingCommunity.Lib.Downloader import HLS_Downloader
@@ -19,6 +22,9 @@ from StreamingCommunity.Api.Template.Class.SearchType import MediaItem
 from StreamingCommunity.Api.Player.maxstream import VideoSource
 
 
+# Variable
+console = Console()
+
 
 def download_film(select_title: MediaItem) -> str:
     """
@@ -31,7 +37,7 @@ def download_film(select_title: MediaItem) -> str:
         - str: output path
     """
     start_message()
-    console.print(f"[yellow]Download:  [red]{select_title.name} \n")
+    console.print(f"[bold yellow]Download:[/bold yellow] [red]{site_constant.SITE_NAME}[/red] → [cyan]{select_title.name}[/cyan] \n")
 
     # Setup api manger
     video_source = VideoSource(select_title.url)
@@ -49,10 +55,8 @@ def download_film(select_title: MediaItem) -> str:
         output_path=os.path.join(mp4_path, title_name)
     ).start()
 
-    if "error" in r_proc.keys():
-        try:
-            os.remove(r_proc['path'])
-        except:
-            pass
+    if r_proc['error'] is not None:
+        try: os.remove(r_proc['path'])
+        except: pass
 
     return r_proc['path']

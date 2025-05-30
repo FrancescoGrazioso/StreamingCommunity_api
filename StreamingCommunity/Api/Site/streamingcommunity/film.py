@@ -3,8 +3,11 @@
 import os
 
 
+# External library
+from rich.console import Console
+
+
 # Internal utilities
-from StreamingCommunity.Util.console import console
 from StreamingCommunity.Util.os import os_manager
 from StreamingCommunity.Util.message import start_message
 from StreamingCommunity.Lib.Downloader import HLS_Downloader
@@ -20,7 +23,11 @@ from StreamingCommunity.Api.Template.Class.SearchType import MediaItem
 from StreamingCommunity.Api.Player.vixcloud import VideoSource
 
 
-def download_film(select_title: MediaItem) -> str:
+# Variable
+console = Console()
+
+
+def download_film(select_title: MediaItem, proxy: str = None) -> str:
     """
     Downloads a film using the provided film ID, title name, and domain.
 
@@ -45,11 +52,10 @@ def download_film(select_title: MediaItem) -> str:
 
     # Start message and display film information
     start_message()
-    console.print(f"[yellow]Download: [red]{select_title.name} \n")
+    console.print(f"[bold yellow]Download:[/bold yellow] [red]{site_constant.SITE_NAME}[/red] → [cyan]{select_title.name}[/cyan] \n")
 
     # Init class
-    video_source = VideoSource(site_constant.FULL_URL, False)
-    video_source.setup(select_title.id)
+    video_source = VideoSource(f"{site_constant.FULL_URL}/it", False, select_title.id, proxy)
 
     # Retrieve scws and if available master playlist
     video_source.get_iframe(select_title.id)
@@ -73,10 +79,8 @@ def download_film(select_title: MediaItem) -> str:
         if script_id != "unknown":
             TelegramSession.deleteScriptId(script_id)
 
-    if "error" in r_proc.keys():
-        try:
-            os.remove(r_proc['path'])
-        except:
-            pass
+    if r_proc['error'] is not None:
+        try: os.remove(r_proc['path'])
+        except: pass
 
     return r_proc['path']

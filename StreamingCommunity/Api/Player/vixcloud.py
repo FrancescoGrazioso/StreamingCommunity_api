@@ -1,6 +1,6 @@
 # 01.03.24
 
-import sys
+import time
 import logging
 from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
@@ -8,41 +8,37 @@ from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 # External libraries
 import httpx
 from bs4 import BeautifulSoup
+from rich.console import Console
 
 
 # Internal utilities
 from StreamingCommunity.Util.headers import get_userAgent
-from StreamingCommunity.Util.console import console
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 from .Helper.Vixcloud.util import WindowVideo, WindowParameter, StreamsCollection
 from .Helper.Vixcloud.js_parser import JavaScriptParser
 
 
 # Variable
-max_timeout = config_manager.get_int("REQUESTS", "timeout")
+MAX_TIMEOUT = config_manager.get_int("REQUESTS", "timeout")
+console = Console()
 
 
 class VideoSource:
-    def __init__(self, url: str, is_series: bool):
+    def __init__(self, url: str, is_series: bool, media_id: int = None, proxy: str = None):
         """
         Initialize video source for streaming site.
         
         Args:
             - url (str): The URL of the streaming site.
             - is_series (bool): Flag for series or movie content
+            - media_id (int, optional): Unique identifier for media item
         """
         self.headers = {'user-agent': get_userAgent()}
         self.url = url
+        self.proxy = proxy
         self.is_series = is_series
-
-    def setup(self, media_id: int):
-        """
-        Configure media-specific context.
-        
-        Args:
-            media_id (int): Unique identifier for media item
-        """
         self.media_id = media_id
+        self.iframe_src = None
 
     def get_iframe(self, episode_id: int) -> None:
         """
@@ -60,13 +56,7 @@ class VideoSource:
             }
 
         try:
-
-            # Make a request to get iframe source
-            response = httpx.get(
-                url=f"{self.url}/iframe/{self.media_id}", 
-                params=params, 
-                timeout=max_timeout
-            )
+            response = httpx.get(f"{self.url}/iframe/{self.media_id}", headers=self.headers, params=params, timeout=MAX_TIMEOUT, proxy=self.proxy)
             response.raise_for_status()
 
             # Parse response with BeautifulSoup to get iframe source
@@ -92,6 +82,7 @@ class VideoSource:
             self.window_video = WindowVideo(converter.get('video'))
             self.window_streams = StreamsCollection(converter.get('streams'))
             self.window_parameter = WindowParameter(converter.get('masterPlaylist'))
+            time.sleep(0.5)
 
         except Exception as e:
             logging.error(f"Error parsing script: {e}")
@@ -108,19 +99,8 @@ class VideoSource:
         """
         try:
             if self.iframe_src is not None:
-
-                # Make a request to get content
-                try:
-                    response = httpx.get(
-                        url=self.iframe_src, 
-                        headers=self.headers, 
-                        timeout=max_timeout
-                    )
-                    response.raise_for_status()
-
-                except Exception as e:
-                    logging.error(f"Failed to get vixcloud contente with error: {e}")
-                    sys.exit(0)
+                response = httpx.get(self.iframe_src, headers=self.headers, timeout=MAX_TIMEOUT)
+                response.raise_for_status()
 
                 # Parse response with BeautifulSoup to get content
                 soup = BeautifulSoup(response.text, "html.parser")
@@ -140,7 +120,6 @@ class VideoSource:
         Returns:
             str: Fully constructed playlist URL with authentication parameters
         """
-        # Initialize parameters dictionary
         params = {}
 
         # Add 'h' parameter if video quality is 1080p
@@ -167,56 +146,6 @@ class VideoSource:
         # Construct the new URL with updated query parameters
         return urlunparse(parsed_url._replace(query=query_string))
 
-    def get_mp4(self, url_to_download: str, scws_id: str) -> list:
-        """
-        Generate download links for the specified resolutions from StreamingCommunity.
-        
-        Args:
-            url_to_download (str): URL of the video page.
-            scws_id (str): SCWS ID of the title.
-        
-        Returns:
-            list: A list of video download URLs.
-        """
-        headers = {
-            'referer': url_to_download,
-            'user-agent': get_userAgent(),
-        }
-
-        # API request to get video details
-        video_api_url = f'{self.url}/api/video/{scws_id}'
-        response = httpx.get(video_api_url, headers=headers)
-
-        if response.status_code == 200:
-            response_json = response.json()
-
-            video_tracks = response_json.get('video_tracks', [])
-            track = video_tracks[-1]
-            console.print(f"[cyan]Available resolutions: [red]{[str(track['quality']) for track in video_tracks]}")
-
-            # Request download link generation for each track
-            download_response = httpx.post(
-                url=f'{self.url}/api/download/generate_link?scws_id={track["video_id"]}&rendition={track["quality"]}',
-                headers={
-                    'referer': url_to_download,
-                    'user-agent': get_userAgent(),
-                    'x-xsrf-token': config_manager.get("SITE", self.base_name)['extra']['x-xsrf-token']
-                },
-                cookies={
-                    'streamingcommunity_session': config_manager.get("SITE", self.base_name)['extra']['streamingcommunity_session']
-                }
-            )
-
-            if download_response.status_code == 200:
-                return {'url': download_response.text, 'quality': track["quality"]}
-
-            else:
-                logging.error(f"Failed to generate link for resolution {track['quality']} (HTTP {download_response.status_code}).")
-
-        else:
-            logging.error(f"Error fetching video API URL (HTTP {response.status_code}).")
-            return []
-
 
 class VideoSourceAnime(VideoSource):
     def __init__(self, url: str):
@@ -231,6 +160,7 @@ class VideoSourceAnime(VideoSource):
         self.headers = {'user-agent': get_userAgent()}
         self.url = url
         self.src_mp4 = None
+        self.iframe_src = None
 
     def get_embed(self, episode_id: int):
         """
@@ -243,12 +173,7 @@ class VideoSourceAnime(VideoSource):
             str: Parsed script content
         """
         try:
-
-            response = httpx.get(
-                url=f"{self.url}/embed-url/{episode_id}", 
-                headers=self.headers, 
-                timeout=max_timeout
-            )
+            response = httpx.get(f"{self.url}/embed-url/{episode_id}", headers=self.headers, timeout=MAX_TIMEOUT)
             response.raise_for_status()
 
             # Extract and clean embed URL

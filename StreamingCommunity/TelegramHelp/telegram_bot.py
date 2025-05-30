@@ -113,7 +113,7 @@ class TelegramRequestManager:
                 return False
 
         except (FileNotFoundError, json.JSONDecodeError) as e:
-            print(f"⚠️ save_response - errore: {e}")
+            print(f" save_response - errore: {e}")
             return False
 
     def get_response(self) -> Optional[str]:
@@ -142,7 +142,7 @@ class TelegramRequestManager:
             return True
 
         except Exception as e:
-            print(f"⚠️ clear_file - errore: {e}")
+            print(f" clear_file - errore: {e}")
             return False
 
 # Funzione per caricare variabili da un file .env
@@ -230,20 +230,20 @@ class TelegramBot:
                                     ["screen", "-S", script["screen_id"], "-X", "quit"]
                                 )
                                 print(
-                                    f"✅ La sessione screen con ID {script['screen_id']} è stata fermata automaticamente."
+                                    f" La sessione screen con ID {script['screen_id']} è stata fermata automaticamente."
                                 )
                             except subprocess.CalledProcessError:
                                 print(
-                                    f"⚠️ Impossibile fermare la sessione screen con ID {script['screen_id']}."
+                                    f" Impossibile fermare la sessione screen con ID {script['screen_id']}."
                                 )
                             print(
-                                f"⚠️ Lo script con ID {script['screen_id']} ha superato i 10 minuti e verrà rimosso."
+                                f" Lo script con ID {script['screen_id']} ha superato i 10 minuti e verrà rimosso."
                             )
                         else:
                             scripts_data_to_save.append(script)
                     else:
                         print(
-                            f"⚠️ La sessione screen con ID {script['screen_id']} non esiste più e verrà rimossa."
+                            f" La sessione screen con ID {script['screen_id']} non esiste più e verrà rimossa."
                         )
 
                 # Salva la lista aggiornata, senza gli script scaduti o le screen non esistenti
@@ -305,8 +305,8 @@ class TelegramBot:
 
     def handle_get_id(self, message):
         if not self.is_authorized(message.from_user.id):
-            print(f"❌ Non sei autorizzato.")
-            self.bot.send_message(message.chat.id, "❌ Non sei autorizzato.")
+            print(f" Non sei autorizzato.")
+            self.bot.send_message(message.chat.id, " Non sei autorizzato.")
             return
 
         print(f"Il tuo ID utente è: `{message.from_user.id}`")
@@ -318,8 +318,8 @@ class TelegramBot:
 
     def handle_start_script(self, message):
         if not self.is_authorized(message.from_user.id):
-            print(f"❌ Non sei autorizzato. {message.from_user.id}")
-            self.bot.send_message(message.chat.id, "❌ Non sei autorizzato.")
+            print(f" Non sei autorizzato. {message.from_user.id}")
+            self.bot.send_message(message.chat.id, " Non sei autorizzato.")
             return
 
         screen_id = str(uuid.uuid4())[:8]
@@ -335,10 +335,10 @@ class TelegramBot:
                     "utf-8"
                 )
                 if screen_id in existing_screens:
-                    print(f"⚠️ Lo script con ID {screen_id} è già in esecuzione.")
+                    print(f" Lo script con ID {screen_id} è già in esecuzione.")
                     self.bot.send_message(
                         message.chat.id,
-                        f"⚠️ Lo script con ID {screen_id} è già in esecuzione.",
+                        f" Lo script con ID {screen_id} è già in esecuzione.",
                     )
                     return
             except subprocess.CalledProcessError:
@@ -384,8 +384,8 @@ class TelegramBot:
 
     def handle_list_scripts(self, message):
         if not self.is_authorized(message.from_user.id):
-            print(f"❌ Non sei autorizzato.")
-            self.bot.send_message(message.chat.id, "❌ Non sei autorizzato.")
+            print(f" Non sei autorizzato.")
+            self.bot.send_message(message.chat.id, " Non sei autorizzato.")
             return
 
         try:
@@ -395,12 +395,12 @@ class TelegramBot:
             scripts_data = []
 
         if not scripts_data:
-            print(f"⚠️ Nessuno script registrato.")
-            self.bot.send_message(message.chat.id, "⚠️ Nessuno script registrato.")
+            print(f" Nessuno script registrato.")
+            self.bot.send_message(message.chat.id, " Nessuno script registrato.")
             return
 
         current_time = time.time()
-        msg = ["🖥️ **Script Registrati:**\n"]
+        msg = [" **Script Registrati:**\n"]
 
         for script in scripts_data:
             # Calcola la durata
@@ -414,12 +414,12 @@ class TelegramBot:
             duration_str = f"{int(hours)}h {int(minutes)}m {int(seconds)}s"
 
             # Icona stato
-            status_icons = {"running": "🟢", "stopped": "🔴", "completed": "⚪"}
+            status_icons = {"running": "", "stopped": "", "completed": ""}
 
             # Costruisci riga
             line = (
                 f"• ID: `{script['screen_id']}`\n"
-                f"• Stato: {status_icons.get(script['status'], '⚫')}\n"
+                f"• Stato: {status_icons.get(script['status'], '')}\n"
                 f"• Stop: `/stop {script['screen_id']}`\n"
                 f"• Screen: `/screen {script['screen_id']}`\n"
                 f"• Durata: {duration_str}\n"
@@ -437,8 +437,8 @@ class TelegramBot:
 
     def handle_stop_script(self, message):
         if not self.is_authorized(message.from_user.id):
-            print(f"❌ Non sei autorizzato.")
-            self.bot.send_message(message.chat.id, "❌ Non sei autorizzato.")
+            print(f" Non sei autorizzato.")
+            self.bot.send_message(message.chat.id, " Non sei autorizzato.")
             return
 
         parts = message.text.split()
@@ -452,15 +452,15 @@ class TelegramBot:
             running_scripts = [s for s in scripts_data if s["status"] == "running"]
 
             if not running_scripts:
-                print(f"⚠️ Nessuno script attivo da fermare.")
+                print(f" Nessuno script attivo da fermare.")
                 self.bot.send_message(
-                    message.chat.id, "⚠️ Nessuno script attivo da fermare."
+                    message.chat.id, " Nessuno script attivo da fermare."
                 )
                 return
 
-            msg = "🖥️ **Script Attivi:**\n"
+            msg = " **Script Attivi:**\n"
             for script in running_scripts:
-                msg += f"🔹 `/stop {script['screen_id']}` per fermarlo\n"
+                msg += f" `/stop {script['screen_id']}` per fermarlo\n"
 
             print(f"{msg}")
             self.bot.send_message(message.chat.id, msg, parse_mode="Markdown")
@@ -481,10 +481,10 @@ class TelegramBot:
 
             if len(new_scripts_data) == len(scripts_data):
                 # Nessun elemento rimosso, quindi ID non trovato
-                print(f"⚠️ Nessuno script attivo con ID `{screen_id}`.")
+                print(f" Nessuno script attivo con ID `{screen_id}`.")
                 self.bot.send_message(
                     message.chat.id,
-                    f"⚠️ Nessuno script attivo con ID `{screen_id}`.",
+                    f" Nessuno script attivo con ID `{screen_id}`.",
                     parse_mode="Markdown",
                 )
                 return
@@ -492,14 +492,14 @@ class TelegramBot:
             # Terminare la sessione screen
             try:
                 subprocess.check_output(["screen", "-S", screen_id, "-X", "quit"])
-                print(f"✅ La sessione screen con ID {screen_id} è stata fermata.")
+                print(f" La sessione screen con ID {screen_id} è stata fermata.")
             except subprocess.CalledProcessError:
                 print(
-                    f"⚠️ Impossibile fermare la sessione screen con ID `{screen_id}`."
+                    f" Impossibile fermare la sessione screen con ID `{screen_id}`."
                 )
                 self.bot.send_message(
                     message.chat.id,
-                    f"⚠️ Impossibile fermare la sessione screen con ID `{screen_id}`.",
+                    f" Impossibile fermare la sessione screen con ID `{screen_id}`.",
                     parse_mode="Markdown",
                 )
                 return
@@ -508,27 +508,27 @@ class TelegramBot:
             with open("../../scripts.json", "w") as f:
                 json.dump(new_scripts_data, f, indent=4)
 
-            print(f"✅ Script `{screen_id}` terminato con successo!")
+            print(f" Script `{screen_id}` terminato con successo!")
             self.bot.send_message(
                 message.chat.id,
-                f"✅ Script `{screen_id}` terminato con successo!",
+                f" Script `{screen_id}` terminato con successo!",
                 parse_mode="Markdown",
             )
 
     def handle_response(self, message):
         text = message.text
         if self.request_manager.save_response(text):
-            print(f"📥 Risposta salvata correttamente per il tipo {text}")
+            print(f" Risposta salvata correttamente per il tipo {text}")
         else:
-            print("⚠️ Nessuna richiesta attiva.")
-            self.bot.reply_to(message, "❌ Nessuna richiesta attiva.")
+            print(" Nessuna richiesta attiva.")
+            self.bot.reply_to(message, " Nessuna richiesta attiva.")
 
     def handle_screen_status(self, message):
         command_parts = message.text.split()
         if len(command_parts) < 2:
-            print(f"⚠️ ID mancante nel comando. Usa: /screen <ID>")
+            print(f" ID mancante nel comando. Usa: /screen <ID>")
             self.bot.send_message(
-                message.chat.id, "⚠️ ID mancante nel comando. Usa: /screen <ID>"
+                message.chat.id, " ID mancante nel comando. Usa: /screen <ID>"
             )
             return
 
@@ -539,8 +539,8 @@ class TelegramBot:
             # Verifica se lo screen con l'ID specificato esiste
             existing_screens = subprocess.check_output(["screen", "-list"]).decode('utf-8')
             if screen_id not in existing_screens:
-                print(f"⚠️ La sessione screen con ID {screen_id} non esiste.")
-                self.bot.send_message(message.chat.id, f"⚠️ La sessione screen con ID {screen_id} non esiste.")
+                print(f" La sessione screen con ID {screen_id} non esiste.")
+                self.bot.send_message(message.chat.id, f" La sessione screen con ID {screen_id} non esiste.")
                 return
 
             # Cattura l'output della screen
@@ -549,17 +549,17 @@ class TelegramBot:
                 check=True,
             )
         except subprocess.CalledProcessError as e:
-            print(f"❌ Errore durante la cattura dell'output della screen: {e}")
+            print(f" Errore durante la cattura dell'output della screen: {e}")
             self.bot.send_message(
                 message.chat.id,
-                f"❌ Errore durante la cattura dell'output della screen: {e}",
+                f" Errore durante la cattura dell'output della screen: {e}",
             )
             return
 
         if not os.path.exists(temp_file):
-            print(f"❌ Impossibile catturare l'output della screen.")
+            print(f" Impossibile catturare l'output della screen.")
             self.bot.send_message(
-                message.chat.id, f"❌ Impossibile catturare l'output della screen."
+                message.chat.id, f" Impossibile catturare l'output della screen."
             )
             return
 
@@ -575,6 +575,10 @@ class TelegramBot:
             cleaned_output = cleaned_output.replace(
                 "\n\n", "\n"
             )  # Rimuovi newline multipli
+                    
+            # Inizializza le variabili
+            cleaned_output_0 = None  # o ""
+            cleaned_output_1 = None  # o ""
 
             # Dentro cleaned_output c'è una stringa recupero quello che si trova tra ## ##
             download_section = re.search(r"##(.*?)##", cleaned_output, re.DOTALL)
@@ -594,18 +598,18 @@ class TelegramBot:
                 cleaned_output = re.sub(r'segments\.py:\d+', '', cleaned_output)
 
             # Invia l'output pulito
-            print(f"📄 Output della screen {screen_id}:\n{cleaned_output}")
+            print(f" Output della screen {screen_id}:\n{cleaned_output}")
             self._send_long_message(
-                message.chat.id, f"📄 Output della screen {screen_id}:\n{cleaned_output}"
+                message.chat.id, f" Output della screen {screen_id}:\n{cleaned_output}"
             )
 
         except Exception as e:
             print(
-                f"❌ Errore durante la lettura o l'invio dell'output della screen: {e}"
+                f" Errore durante la lettura o l'invio dell'output della screen: {e}"
             )
             self.bot.send_message(
                 message.chat.id,
-                f"❌ Errore durante la lettura o l'invio dell'output della screen: {e}",
+                f" Errore durante la lettura o l'invio dell'output della screen: {e}",
             )
 
         # Cancella il file temporaneo
@@ -665,14 +669,14 @@ class TelegramBot:
                 return response
             time.sleep(1)
 
-        print(f"⚠️ Timeout: nessuna risposta ricevuta.")
+        print(f" Timeout: nessuna risposta ricevuta.")
         for chat_id in self.authorized_users:  # Manda a tutti gli ID autorizzati
-            self.bot.send_message(chat_id, "⚠️ Timeout: nessuna risposta ricevuta.")
+            self.bot.send_message(chat_id, " Timeout: nessuna risposta ricevuta.")
         self.request_manager.clear_file()
         return None
 
     def run(self):
-        print("🚀 Avvio del bot...")
+        print(" Avvio del bot...")
         with open("../../scripts.json", "w") as f:
             json.dump([], f)
         self.bot.infinity_polling()

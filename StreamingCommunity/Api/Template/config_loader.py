@@ -5,7 +5,7 @@ import inspect
 
 
 # Internal utilities
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 
 
 def get_site_name_from_stack():
@@ -29,15 +29,7 @@ class SiteConstant:
     
     @property
     def ROOT_PATH(self):
-        return config_manager.get('DEFAULT', 'root_path')
-    
-    @property
-    def VERIFY(self):
-        return config_manager.get('REQUESTS', 'verify')
-    
-    @property
-    def DOMAIN_NOW(self):
-        return config_manager.get_site(self.SITE_NAME, 'domain')
+        return config_manager.get('OUT_FOLDER', 'root_path')
     
     @property
     def FULL_URL(self):
@@ -46,23 +38,23 @@ class SiteConstant:
     @property
     def SERIES_FOLDER(self):
         base_path = self.ROOT_PATH
-        if config_manager.get_bool("DEFAULT", "add_siteName"):
+        if config_manager.get_bool("OUT_FOLDER", "add_siteName"):
             base_path = os.path.join(base_path, self.SITE_NAME)
-        return os.path.join(base_path, config_manager.get('DEFAULT', 'serie_folder_name'))
+        return os.path.join(base_path, config_manager.get('OUT_FOLDER', 'serie_folder_name'))
     
     @property
     def MOVIE_FOLDER(self):
         base_path = self.ROOT_PATH
-        if config_manager.get_bool("DEFAULT", "add_siteName"):
+        if config_manager.get_bool("OUT_FOLDER", "add_siteName"):
             base_path = os.path.join(base_path, self.SITE_NAME)
-        return os.path.join(base_path, config_manager.get('DEFAULT', 'movie_folder_name'))
+        return os.path.join(base_path, config_manager.get('OUT_FOLDER', 'movie_folder_name'))
     
     @property
     def ANIME_FOLDER(self):
         base_path = self.ROOT_PATH
-        if config_manager.get_bool("DEFAULT", "add_siteName"):
+        if config_manager.get_bool("OUT_FOLDER", "add_siteName"):
             base_path = os.path.join(base_path, self.SITE_NAME)
-        return os.path.join(base_path, config_manager.get('DEFAULT', 'anime_folder_name'))
+        return os.path.join(base_path, config_manager.get('OUT_FOLDER', 'anime_folder_name'))
     
     @property
     def COOKIE(self):

@@ -41,13 +41,18 @@ ENV/
 env.bak/
 venv.bak/
 
+# IDEs
+.idea
+.vscode
+
 # Other
 Video
 note.txt
-list_proxy.txt
 cmd.txt
 bot_config.json
 scripts.json
 active_requests.json
-.idea/
+domains.json
+working_proxies.json
 .vscode/
+.idea/

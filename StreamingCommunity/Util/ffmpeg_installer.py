@@ -238,6 +238,31 @@ class FFMPEGDownloader:
         Returns:
             Tuple[Optional[str], Optional[str], Optional[str]]: Paths to ffmpeg, ffprobe, and ffplay executables.
         """
+        if self.os_name == 'linux':
+            try:
+                # Attempt to install FFmpeg using apt
+                console.print("[bold blue]Trying to install FFmpeg using 'sudo apt install ffmpeg'[/]")
+                result = subprocess.run(
+                    ['sudo', 'apt', 'install', '-y', 'ffmpeg'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                if result.returncode == 0:
+                    ffmpeg_path = shutil.which('ffmpeg')
+                    ffprobe_path = shutil.which('ffprobe')
+
+                    if ffmpeg_path and ffprobe_path:
+                        console.print("[bold green]FFmpeg successfully installed via apt[/]")
+                        return ffmpeg_path, ffprobe_path, None
+                else:
+                    console.print("[bold yellow]Failed to install FFmpeg via apt. Proceeding with static download.[/]")
+                    
+            except Exception as e:
+                logging.error(f"Error during 'sudo apt install ffmpeg': {e}")
+                console.print("[bold red]Error during 'sudo apt install ffmpeg'. Proceeding with static download.[/]")
+
+        # Proceed with static download if apt installation fails or is not applicable
         config = FFMPEG_CONFIGURATION[self.os_name]
         executables = [exe.format(arch=self.arch) for exe in config['executables']]
         successful_extractions = []

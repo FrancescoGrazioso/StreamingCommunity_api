@@ -5,35 +5,67 @@ import logging
 from typing import List
 
 
+# External library
+from rich.console import Console
+from rich.prompt import Prompt
+
+
 # Internal utilities
-from StreamingCommunity.Util.console import console, msg
 from StreamingCommunity.Util.os import os_manager
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 from StreamingCommunity.Util.table import TVShowManager
 
 
-# Config
-MAP_EPISODE = config_manager.get('DEFAULT', 'map_episode_name')
+# Variable
+msg = Prompt()
+console = Console()
+MAP_EPISODE = config_manager.get('OUT_FOLDER', 'map_episode_name')
 
 
-def dynamic_format_number(n: int) -> str:
+def dynamic_format_number(number_str: str) -> str:
     """
-    Formats a number by adding a leading zero if it is less than 9.
-    The width of the resulting string is dynamic, calculated as the number of digits in the number plus one 
-    for numbers less than 9, otherwise the width remains the same.
+    Formats an episode number string, intelligently handling both integer and decimal episode numbers.
+    
+    This function is designed to handle various episode number formats commonly found in media series:
+    1. For integer episode numbers less than 10 (e.g., 1, 2, ..., 9), it adds a leading zero (e.g., 01, 02, ..., 09)
+    2. For integer episode numbers 10 and above, it preserves the original format without adding leading zeros
+    3. For decimal episode numbers (e.g., "7.5", "10.5"), it preserves the decimal format exactly as provided
+    
+    The function is particularly useful for media file naming conventions where special episodes
+    or OVAs may have decimal notations (like episode 7.5) which should be preserved in their original format.
     
     Parameters:
-        - n (int): The number to format.
+        - number_str (str): The episode number as a string, which may contain integers or decimals.
     
     Returns:
-        - str: The formatted number as a string with a leading zero if the number is less than 9.
+        - str: The formatted episode number string, with appropriate handling based on the input type.
+    
+    Examples:
+        >>> dynamic_format_number("7")
+        "07"
+        >>> dynamic_format_number("15")
+        "15"
+        >>> dynamic_format_number("7.5")
+        "7.5"
+        >>> dynamic_format_number("10.5")
+        "10.5"
     """
-    if n < 10:
-        width = len(str(n)) + 1
-    else:
-        width = len(str(n))
+    try:
+        if '.' in number_str:
+            return number_str
+        
+        n = int(number_str)
 
-    return str(n).zfill(width)
+        if n < 10:
+            width = len(str(n)) + 1
+        else:
+            width = len(str(n))
+
+        return str(n).zfill(width)
+    
+    except Exception as e:
+        logging.warning(f"Could not format episode number '{number_str}': {str(e)}. Using original format.")
+        return number_str
 
 
 def manage_selection(cmd_insert: str, max_count: int) -> List[int]:
@@ -97,14 +129,14 @@ def map_episode_title(tv_name: str, number_season: int, episode_number: int, epi
         map_episode_temp = map_episode_temp.replace("%(tv_name)", os_manager.get_sanitize_file(tv_name))
 
     if number_season != None:
-        map_episode_temp = map_episode_temp.replace("%(season)", number_season)
+        map_episode_temp = map_episode_temp.replace("%(season)", str(number_season))
     else:
-        map_episode_temp = map_episode_temp.replace("%(season)", dynamic_format_number(0))
+        map_episode_temp = map_episode_temp.replace("%(season)", dynamic_format_number(str(0)))
 
     if episode_number != None:
-        map_episode_temp = map_episode_temp.replace("%(episode)", dynamic_format_number(episode_number))
+        map_episode_temp = map_episode_temp.replace("%(episode)", dynamic_format_number(str(episode_number)))
     else:
-        map_episode_temp = map_episode_temp.replace("%(episode)", dynamic_format_number(0))
+        map_episode_temp = map_episode_temp.replace("%(episode)", dynamic_format_number(str(0)))
 
     if episode_name != None:
         map_episode_temp = map_episode_temp.replace("%(episode_name)", os_manager.get_sanitize_file(episode_name))
@@ -186,6 +218,7 @@ def validate_episode_selection(list_episode_select: List[int], episodes_count: i
             input_episodes = input(f"Enter valid episode numbers (1-{episodes_count}): ")
             list_episode_select = list(map(int, input_episodes.split(',')))
 
+
 def display_episodes_list(episodes_manager) -> str:
     """
     Display episodes list and handle user input.
@@ -195,7 +228,6 @@ def display_episodes_list(episodes_manager) -> str:
     """
     # Set up table for displaying episodes
     table_show_manager = TVShowManager()
-    table_show_manager.set_slice_end(10)
 
     # Add columns to the table
     column_info = {
@@ -222,7 +254,7 @@ def display_episodes_list(episodes_manager) -> str:
     last_command = table_show_manager.run()
 
     if last_command in ("q", "quit"):
-        console.print("\n[red]Quit [white]...")
+        console.print("\n[red]Quit ...")
         sys.exit(0)
 
     return last_command

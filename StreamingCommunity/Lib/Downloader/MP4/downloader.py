@@ -12,14 +12,16 @@ from functools import partial
 # External libraries
 import httpx
 from tqdm import tqdm
+from rich.console import Console
+from rich.prompt import Prompt
+from rich.panel import Panel
 
 
 # Internal utilities
 from StreamingCommunity.Util.headers import get_userAgent
 from StreamingCommunity.Util.color import Colors
-from StreamingCommunity.Util.console import console, Panel
-from StreamingCommunity.Util._jsonConfig import config_manager
-from StreamingCommunity.Util.os import internet_manager
+from StreamingCommunity.Util.config_json import config_manager
+from StreamingCommunity.Util.os import internet_manager, os_manager
 from StreamingCommunity.TelegramHelp.telegram_bot import get_bot_instance
 
 
@@ -27,17 +29,16 @@ from StreamingCommunity.TelegramHelp.telegram_bot import get_bot_instance
 from ...FFmpeg import print_duration_table
 
 
-# Suppress SSL warnings
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-
 # Config
+REQUEST_VERIFY = config_manager.get_bool('REQUESTS', 'verify')
 GET_ONLY_LINK = config_manager.get_bool('M3U8_PARSER', 'get_only_link')
 REQUEST_TIMEOUT = config_manager.get_float('REQUESTS', 'timeout')
-
 TELEGRAM_BOT = config_manager.get_bool('DEFAULT', 'telegram_bot')
 
+
+# Variable
+msg = Prompt()
+console = Console()
 
 
 class InterruptHandler:
@@ -46,6 +47,7 @@ class InterruptHandler:
         self.last_interrupt_time = 0
         self.kill_download = False
         self.force_quit = False
+
 
 def signal_handler(signum, frame, interrupt_handler, original_handler):
     """Enhanced signal handler for multiple interrupt scenarios"""
@@ -67,6 +69,7 @@ def signal_handler(signum, frame, interrupt_handler, original_handler):
         console.print("\n[bold red]Force quit activated. Saving partial download...[/bold red]")
         signal.signal(signum, original_handler)
 
+
 def MP4_downloader(url: str, path: str, referer: str = None, headers_: dict = None):
     """
     Downloads an MP4 video with enhanced interrupt handling.
@@ -77,51 +80,51 @@ def MP4_downloader(url: str, path: str, referer: str = None, headers_: dict = No
         bot = get_bot_instance()
         console.log("####")
 
+    path = os_manager.get_sanitize_path(path)
     if os.path.exists(path):
         console.log("[red]Output file already exists.")
         if TELEGRAM_BOT:
             bot.send_message(f"Contenuto già scaricato!", None)
-        return 400
+        return None, False
 
     if GET_ONLY_LINK:
-        return {'path': path, 'url': url}
+        console.print(f"URL: {url}[/bold red]")
+        return path, True
 
     if not (url.lower().startswith('http://') or url.lower().startswith('https://')):
         logging.error(f"Invalid URL: {url}")
         console.print(f"[bold red]Invalid URL: {url}[/bold red]")
-        return None
+        return None, False
 
-    try:
-        headers = {}
-        if referer:
-            headers['Referer'] = referer
-        
-        if headers_:
-            headers.update(headers_)
-        else:
-            headers['User-Agent'] = get_userAgent()
-
-    except Exception as header_err:
-        logging.error(f"Error preparing headers: {header_err}")
-        console.print(f"[bold red]Error preparing headers: {header_err}[/bold red]")
-        return None
+    # Set headers
+    headers = {}
+    if referer:
+        headers['Referer'] = referer
     
+    if headers_:
+        headers.update(headers_)
+    else:
+        headers['User-Agent'] = get_userAgent()
+
+    # Set interrupt handler
     temp_path = f"{path}.temp"
     interrupt_handler = InterruptHandler()
     original_handler = signal.signal(signal.SIGINT, partial(signal_handler, interrupt_handler=interrupt_handler, original_handler=signal.getsignal(signal.SIGINT)))
 
+    # Ensure the output directory exists
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
     try:
-        transport = httpx.HTTPTransport(verify=False, http2=True)
-        
-        with httpx.Client(transport=transport, timeout=httpx.Timeout(60)) as client:
-            with client.stream("GET", url, headers=headers, timeout=REQUEST_TIMEOUT) as response:
+        with httpx.Client() as client:
+            with client.stream("GET", url, headers=headers) as response:
                 response.raise_for_status()
                 total = int(response.headers.get('content-length', 0))
                 
                 if total == 0:
                     console.print("[bold red]No video stream found.[/bold red]")
-                    return None
+                    return None, False
 
+                # Create a fancy progress bar
                 progress_bar = tqdm(
                     total=total,
                     ascii='░▒█',
@@ -134,7 +137,7 @@ def MP4_downloader(url: str, path: str, referer: str = None, headers_: dict = No
                     unit_scale=True,
                     desc='Downloading',
                     mininterval=0.05,
-                    file=sys.stdout                         # Using file=sys.stdout to force in-place updates because sys.stderr may not support carriage returns in this environment.
+                    file=sys.stdout                         # Using file=sys.stdout to force in-place updates because sys.stderr may not support carriage returns in this environment.  
                 )
 
                 downloaded = 0

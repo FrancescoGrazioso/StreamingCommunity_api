@@ -16,12 +16,13 @@ from rich.style import Style
 
 
 # Internal utilities
+from .os import get_call_stack
 from .message import start_message
-from .call_stack import get_call_stack
+
 
 # Telegram bot instance
 from StreamingCommunity.TelegramHelp.telegram_bot import get_bot_instance
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 TELEGRAM_BOT = config_manager.get_bool('DEFAULT', 'telegram_bot')
 
 
@@ -31,20 +32,10 @@ class TVShowManager:
         """Initialize TVShowManager with default values."""
         self.console = Console()
         self.tv_shows: List[Dict[str, Any]] = []
-        self.slice_start: int = 0
-        self.slice_end: int = 5
-        self.step: int = self.slice_end
+        self.slice_start = 0
+        self.slice_end = 10
+        self.step = self.slice_end
         self.column_info = []
-
-    def set_slice_end(self, new_slice: int) -> None:
-        """
-        Set the end of the slice for displaying TV shows.
-
-        Parameters:
-            - new_slice (int): The new value for the slice end.
-        """
-        self.slice_end = new_slice
-        self.step = new_slice
 
     def add_column(self, column_info: Dict[str, Dict[str, str]]) -> None:
         """
@@ -156,15 +147,21 @@ class TVShowManager:
                 if not force_int_input:
                     prompt_msg = ("\n[cyan]Insert media index [yellow](e.g., 1), [red]* [cyan]to download all media, "
                                 "[yellow](e.g., 1-2) [cyan]for a range of media, or [yellow](e.g., 3-*) [cyan]to download from a specific index to the end")
+                    telegram_msg = "Menu di selezione degli episodi: \n\n" \
+                                   "- Inserisci il numero dell'episodio (ad esempio, 1)\n" \
+                                   "- Inserisci * per scaricare tutti gli episodi\n" \
+                                   "- Inserisci un intervallo di episodi (ad esempio, 1-2) per scaricare da un episodio all'altro\n" \
+                                   "- Inserisci (ad esempio, 3-*) per scaricare dall'episodio specificato fino alla fine della serie"
                     
                     if is_telegram:
-                        key = bot.ask("select_title_episode", prompt_msg, None)
+                        key = bot.ask("select_title_episode", telegram_msg, None)
                     else:
                         key = Prompt.ask(prompt_msg)
                 else:
-                    choices = [str(i) for i in range(max_int_input + 1)] + ["q", "quit", "b", "back"]
+                    # Include empty string in choices to allow pagination with Enter key
+                    choices = [""] + [str(i) for i in range(max_int_input + 1)] + ["q", "quit", "b", "back"]
                     prompt_msg = "[cyan]Insert media [red]index"
-                    telegram_msg = "Scegli il contenuto da scaricare:\n📺 Serie TV - 🎞️ Film - 🌀 Anime\noppure `back` per tornare indietro"
+                    telegram_msg = "Scegli il contenuto da scaricare:\n Serie TV -  Film -  Anime\noppure `back` per tornare indietro"
                     
                     if is_telegram:
                         key = bot.ask("select_title", telegram_msg, None)
@@ -192,15 +189,21 @@ class TVShowManager:
                 if not force_int_input:
                     prompt_msg = ("\n[cyan]Insert media index [yellow](e.g., 1), [red]* [cyan]to download all media, "
                                 "[yellow](e.g., 1-2) [cyan]for a range of media, or [yellow](e.g., 3-*) [cyan]to download from a specific index to the end")
+                    telegram_msg = "Menu di selezione degli episodi: \n\n" \
+                                   "- Inserisci il numero dell'episodio (ad esempio, 1)\n" \
+                                   "- Inserisci * per scaricare tutti gli episodi\n" \
+                                   "- Inserisci un intervallo di episodi (ad esempio, 1-2) per scaricare da un episodio all'altro\n" \
+                                   "- Inserisci (ad esempio, 3-*) per scaricare dall'episodio specificato fino alla fine della serie"
                     
                     if is_telegram:
-                        key = bot.ask("select_title_episode", prompt_msg, None)
+                        key = bot.ask("select_title_episode", telegram_msg, None)
                     else:
                         key = Prompt.ask(prompt_msg)
                 else:
-                    choices = [str(i) for i in range(max_int_input + 1)] + ["q", "quit", "b", "back"]
+                    # Include empty string in choices to allow pagination with Enter key
+                    choices = [""] + [str(i) for i in range(max_int_input + 1)] + ["q", "quit", "b", "back"]
                     prompt_msg = "[cyan]Insert media [red]index"
-                    telegram_msg = "Scegli il contenuto da scaricare:\n📺 Serie TV - 🎞️ Film - 🌀 Anime\noppure `back` per tornare indietro"
+                    telegram_msg = "Scegli il contenuto da scaricare:\n Serie TV -  Film -  Anime\noppure `back` per tornare indietro"
                     
                     if is_telegram:
                         key = bot.ask("select_title", telegram_msg, None)

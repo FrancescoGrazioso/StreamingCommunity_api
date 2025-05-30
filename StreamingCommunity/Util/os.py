@@ -4,28 +4,31 @@ import io
 import os
 import glob
 import sys
-import time
 import shutil
 import hashlib
 import logging
 import platform
+import inspect
 import subprocess
 import contextlib
-import urllib.request
 import importlib.metadata
-from pathlib import Path
 
 
 # External library
-import httpx
 from unidecode import unidecode
+from rich.console import Console
+from rich.prompt import Prompt
 from pathvalidate import sanitize_filename, sanitize_filepath
+from dns.resolver import dns
 
 
 # Internal utilities
 from .ffmpeg_installer import check_ffmpeg
-from StreamingCommunity.Util.console import console, msg
 
+
+# Variable
+msg = Prompt()
+console = Console()
 
 
 class OsManager:
@@ -102,16 +105,14 @@ class OsManager:
         if not path:
             return path
 
-        # Decode unicode characters
+        # Decode unicode characters and perform basic sanitization
         decoded = unidecode(path)
-
-        # Basic path sanitization
         sanitized = sanitize_filepath(decoded)
 
         if self.system == 'windows':
             # Handle network paths (UNC or IP-based)
-            if path.startswith('\\\\') or path.startswith('//'):
-                parts = path.replace('/', '\\').split('\\')
+            if sanitized.startswith('\\\\') or sanitized.startswith('//'):
+                parts = sanitized.replace('/', '\\').split('\\')
                 # Keep server/IP and share name as is
                 sanitized_parts = parts[:4]
                 # Sanitize remaining parts
@@ -124,9 +125,9 @@ class OsManager:
                 return '\\'.join(sanitized_parts)
 
             # Handle drive letters
-            elif len(path) >= 2 and path[1] == ':':
-                drive = path[:2]
-                rest = path[2:].lstrip('\\').lstrip('/')
+            elif len(sanitized) >= 2 and sanitized[1] == ':':
+                drive = sanitized[:2]
+                rest = sanitized[2:].lstrip('\\').lstrip('/')
                 path_parts = [drive] + [
                     self.get_sanitize_file(part)
                     for part in rest.replace('/', '\\').split('\\')
@@ -136,12 +137,12 @@ class OsManager:
 
             # Regular path
             else:
-                parts = path.replace('/', '\\').split('\\')
+                parts = sanitized.replace('/', '\\').split('\\')
                 return '\\'.join(p for p in parts if p)
         else:
             # Handle Unix-like paths (Linux and macOS)
-            is_absolute = path.startswith('/')
-            parts = path.replace('\\', '/').split('/')
+            is_absolute = sanitized.startswith('/')
+            parts = sanitized.replace('\\', '/').split('/')
             sanitized_parts = [
                 self.get_sanitize_file(part)
                 for part in parts
@@ -243,7 +244,6 @@ class OsManager:
 
 
 class InternManager():
-
     def format_file_size(self, size_bytes: float) -> str:
         """
         Formats a file size from bytes into a human-readable string representation.
@@ -283,20 +283,39 @@ class InternManager():
         else:
             return f"{bytes / (1024 * 1024):.2f} MB/s"
 
-    @staticmethod
-    def check_internet():
-        while True:
-            try:
-                httpx.get("https://www.google.com", timeout=5)
-                break
-
-            except Exception as e:
-                console.log("[bold red]Internet is not available. Waiting...[/bold red]")
-                time.sleep(2)
+    def check_dns_provider(self):
+        """
+        Check if the system's current DNS server matches any known DNS providers.
+        
+        Returns:
+            bool: True if the current DNS server matches a known provider,
+                  False if no match is found or in case of errors
+        """
+        dns_providers = {
+            "Cloudflare": ["1.1.1.1", "1.0.0.1"],
+            "Google": ["8.8.8.8", "8.8.4.4"],
+            "OpenDNS": ["208.67.222.222", "208.67.220.220"],
+            "Quad9": ["9.9.9.9", "149.112.112.112"],
+        }
+        
+        try:
+            resolver = dns.resolver.Resolver()
+            nameservers = resolver.nameservers
+            
+            if not nameservers:
+                return False
+                
+            for server in nameservers:
+                for provider, ips in dns_providers.items():
+                    if server in ips:
+                        return True
+            return False
+            
+        except Exception:
+            return False
 
 
 class OsSummary:
-
     def __init__(self):
         self.ffmpeg_path = None
         self.ffprobe_path = None
@@ -343,32 +362,6 @@ class OsSummary:
         except importlib.metadata.PackageNotFoundError:
             return f"{lib_name}-not installed"
 
-    def download_requirements(self, url: str, filename: str):
-        """
-        Download the requirements.txt file from the specified URL if not found locally using requests.
-
-        Args:
-            url (str): The URL to download the requirements file from.
-            filename (str): The local filename to save the requirements file as.
-        """
-        try:
-            import requests
-
-            logging.info(f"{filename} not found locally. Downloading from {url}...")
-            response = requests.get(url)
-
-            if response.status_code == 200:
-                with open(filename, 'wb') as f:
-                    f.write(response.content)
-
-            else:
-                logging.error(f"Failed to download {filename}. HTTP Status code: {response.status_code}")
-                sys.exit(0)
-
-        except Exception as e:
-            logging.error(f"Failed to download {filename}: {e}")
-            sys.exit(0)
-
     def install_library(self, lib_name: str):
         """
         Install a Python library using pip.
@@ -391,25 +384,17 @@ class OsSummary:
         Exits with a message if not the official version.
         """
         python_implementation = platform.python_implementation()
+        python_version = platform.python_version()
 
         if python_implementation != "CPython":
             console.print(f"[bold red]Warning: You are using a non-official Python distribution: {python_implementation}.[/bold red]")
             console.print("Please install the official Python from [bold blue]https://www.python.org[/bold blue] and try again.", style="bold yellow")
             sys.exit(0)
 
+        console.print(f"[cyan]Python version: [bold red]{python_version}[/bold red]")
+
     def get_system_summary(self):
         self.check_python_version()
-        InternManager().check_internet()
-
-        # Python info
-        python_version = sys.version.split()[0]
-        python_implementation = platform.python_implementation()
-        arch = platform.machine()
-        os_info = platform.platform()
-        glibc_version = 'glibc ' + '.'.join(map(str, platform.libc_ver()[1]))
-
-        console.print(f"[cyan]Python[white]: [bold red]{python_version} ({python_implementation} {arch}) - {os_info} ({glibc_version})[/bold red]")
-        logging.info(f"Python: {python_version} ({python_implementation} {arch}) - {os_info} ({glibc_version})")
 
         # FFmpeg detection
         binary_dir = self.get_binary_directory()
@@ -453,33 +438,7 @@ class OsSummary:
             console.log("[red]Can't locate ffmpeg or ffprobe")
             sys.exit(0)
 
-        console.print(f"[cyan]Path[white]: [red]ffmpeg [bold yellow]'{self.ffmpeg_path}'[/bold yellow][white], [red]ffprobe '[bold yellow]{self.ffprobe_path}'[/bold yellow]")
-
-        # Handle requirements.txt
-        if not getattr(sys, 'frozen', False):
-            requirements_file = 'requirements.txt'
-
-            requirements_file = Path(__file__).parent.parent.parent / requirements_file
-
-            if not os.path.exists(requirements_file):
-                self.download_requirements(
-                    'https://raw.githubusercontent.com/Arrowar/StreamingCommunity/refs/heads/main/requirements.txt',
-                    requirements_file
-                )
-
-            optional_libraries = [line.strip().split("=")[0] for line in open(requirements_file, 'r', encoding='utf-8-sig')]
-
-            for lib in optional_libraries:
-                installed_version = self.get_library_version(lib.split("<")[0])
-                if 'not installed' in installed_version:
-                    user_response = msg.ask(f"{lib} is not installed. Do you want to install it? (yes/no)", default="y")
-                    if user_response.lower().strip() in ["yes", "y"]:
-                        self.install_library(lib)
-                else:
-                    logging.info(f"Library: {installed_version}")
-
-            #console.print(f"[cyan]Libraries[white]: [bold red]{', '.join([self.get_library_version(lib) for lib in optional_libraries])}[/bold red]\n")
-            logging.info(f"Libraries: {', '.join([self.get_library_version(lib) for lib in optional_libraries])}")
+        console.print(f"[cyan]Path: [red]ffmpeg [bold yellow]'{self.ffmpeg_path}'[/bold yellow][white], [red]ffprobe '[bold yellow]{self.ffprobe_path}'[/bold yellow]")
 
 
 os_manager = OsManager()
@@ -493,17 +452,36 @@ def suppress_output():
         yield
 
 def compute_sha1_hash(input_string: str) -> str:
-    """
-    Computes the SHA-1 hash of the input string.
+    """Computes the SHA-1 hash of the input string."""
+    return hashlib.sha1(input_string.encode()).hexdigest()
 
-    Parameters:
-        - input_string (str): The string to be hashed.
+def get_call_stack():
+    """Retrieves the current call stack with details about each call."""
+    stack = inspect.stack()
+    call_stack = []
 
-    Returns:
-        str: The SHA-1 hash of the input string.
-    """
-    # Compute the SHA-1 hash
-    hashed_string = hashlib.sha1(input_string.encode()).hexdigest()
+    for frame_info in stack:
+        function_name = frame_info.function
+        filename = frame_info.filename
+        lineno = frame_info.lineno
+        folder_name = os.path.dirname(filename)
+        folder_base = os.path.basename(folder_name)
+        script_name = os.path.basename(filename)
 
-    # Return the hashed string
-    return hashed_string
+        call_stack.append({
+            "function": function_name,
+            "folder": folder_name,
+            "folder_base": folder_base,
+            "script": script_name,
+            "line": lineno
+        })
+        
+    return call_stack
+
+def get_ffmpeg_path():
+    """Returns the path of FFmpeg."""
+    return os_summary.ffmpeg_path
+
+def get_ffprobe_path():
+    """Returns the path of FFprobe."""
+    return os_summary.ffprobe_path

@@ -1,4 +1,5 @@
 # 05.07.24
+# NOTE: NOT USED
 
 import re
 import logging
@@ -11,12 +12,12 @@ from bs4 import BeautifulSoup
 
 
 # Internal utilities
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 from StreamingCommunity.Util.headers import get_userAgent
 
 
 # Variable
-max_timeout = config_manager.get_int("REQUESTS", "timeout")
+MAX_TIMEOUT = config_manager.get_int("REQUESTS", "timeout")
 
 
 class VideoSource:
@@ -38,9 +39,7 @@ class VideoSource:
         Sends a request to the initial URL and extracts the redirect URL.
         """
         try:
-
-            # Send a GET request to the initial URL
-            response = httpx.get(self.url, headers=self.headers, follow_redirects=True, timeout=max_timeout)
+            response = httpx.get(self.url, headers=self.headers, follow_redirects=True, timeout=MAX_TIMEOUT)
             response.raise_for_status()
 
             # Extract the redirect URL from the HTML
@@ -50,11 +49,7 @@ class VideoSource:
 
             return self.redirect_url
         
-        except httpx.RequestError as e:
-            logging.error(f"Error during the initial request: {e}")
-            raise
-
-        except AttributeError as e:
+        except Exception as e:
             logging.error(f"Error parsing HTML: {e}")
             raise
 
@@ -63,9 +58,7 @@ class VideoSource:
         Sends a request to the redirect URL and extracts the Maxstream URL.
         """
         try:
-
-            # Send a GET request to the redirect URL
-            response = httpx.get(self.redirect_url, headers=self.headers, follow_redirects=True, timeout=max_timeout)
+            response = httpx.get(self.redirect_url, headers=self.headers, follow_redirects=True, timeout=MAX_TIMEOUT)
             response.raise_for_status()
 
             # Extract the Maxstream URL from the HTML
@@ -89,7 +82,7 @@ class VideoSource:
                 uprot_url = response.json()['data']['value']
 
                 # Retry getting maxtstream url
-                response = httpx.get(uprot_url, headers=self.headers, follow_redirects=True, timeout=max_timeout)
+                response = httpx.get(uprot_url, headers=self.headers, follow_redirects=True, timeout=MAX_TIMEOUT)
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, "html.parser")
                 maxstream_url = soup.find("a").get("href")
@@ -102,12 +95,8 @@ class VideoSource:
 
             return self.maxstream_url
         
-        except httpx.RequestError as e:
-            logging.error(f"Error during the request to the redirect URL: {e}")
-            raise
-
-        except AttributeError as e:
-            logging.error(f"Error parsing HTML: {e}")
+        except Exception as e:
+            logging.error(f"Error during the request: {e}")
             raise
 
     def get_m3u8_url(self):
@@ -115,9 +104,7 @@ class VideoSource:
         Sends a request to the Maxstream URL and extracts the .m3u8 file URL.
         """
         try:
-            
-            # Send a GET request to the Maxstream URL
-            response = httpx.get(self.maxstream_url, headers=self.headers, follow_redirects=True, timeout=max_timeout)
+            response = httpx.get(self.maxstream_url, headers=self.headers, follow_redirects=True, timeout=MAX_TIMEOUT)
             response.raise_for_status() 
             soup = BeautifulSoup(response.text, "html.parser")
 
@@ -135,6 +122,9 @@ class VideoSource:
                         self.m3u8_url = match.group(1)
                         logging.info(f"M3U8 URL: {self.m3u8_url}")
                         break
+
+                    else:
+                        logging.error("Failed to find M3U8 URL: No match found")
 
             return self.m3u8_url
 

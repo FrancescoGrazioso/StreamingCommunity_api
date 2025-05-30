@@ -17,14 +17,13 @@ from typing import Dict
 # External libraries
 import httpx
 from tqdm import tqdm
+from rich.console import Console
 
 
 # Internal utilities
 from StreamingCommunity.Util.color import Colors
-from StreamingCommunity.Util.console import console
-from StreamingCommunity.Util.headers import get_userAgent, random_headers
-from StreamingCommunity.Util._jsonConfig import config_manager
-from StreamingCommunity.Util.os import os_manager
+from StreamingCommunity.Util.headers import get_userAgent
+from StreamingCommunity.Util.config_json import config_manager
 
 
 # Logic class
@@ -34,23 +33,20 @@ from ...M3U8 import (
     M3U8_Parser,
     M3U8_UrlFix
 )
-from .proxyes import main_test_proxy
 
 # Config
 TQDM_DELAY_WORKER = config_manager.get_float('M3U8_DOWNLOAD', 'tqdm_delay')
-USE_LARGE_BAR = not ("android" in sys.platform or "ios" in sys.platform)
 REQUEST_MAX_RETRY = config_manager.get_int('REQUESTS', 'max_retry')
-REQUEST_VERIFY = False
-THERE_IS_PROXY_LIST = os_manager.check_file("list_proxy.txt")
-PROXY_START_MIN = config_manager.get_float('REQUESTS', 'proxy_start_min')
-PROXY_START_MAX = config_manager.get_float('REQUESTS', 'proxy_start_max')
+REQUEST_VERIFY = config_manager.get_bool('REQUESTS', 'verify')
 DEFAULT_VIDEO_WORKERS = config_manager.get_int('M3U8_DOWNLOAD', 'default_video_workser')
 DEFAULT_AUDIO_WORKERS = config_manager.get_int('M3U8_DOWNLOAD', 'default_audio_workser')
 MAX_TIMEOOUT = config_manager.get_int("REQUESTS", "timeout")
-MAX_INTERRUPT_COUNT = 3
 SEGMENT_MAX_TIMEOUT = config_manager.get_int("M3U8_DOWNLOAD", "segment_timeout")
 TELEGRAM_BOT = config_manager.get_bool('DEFAULT', 'telegram_bot')
+MAX_INTERRUPT_COUNT = 3
 
+# Variable
+console = Console()
 
 
 class M3U8_Segments:
@@ -77,6 +73,9 @@ class M3U8_Segments:
 
         # Sync
         self.queue = PriorityQueue()
+        self.buffer = {}
+        self.expected_index = 0 
+
         self.stop_event = threading.Event()
         self.downloaded_segments = set()
         self.base_timeout = 0.5
@@ -97,6 +96,15 @@ class M3U8_Segments:
         self.active_retries_lock = threading.Lock()
 
     def __get_key__(self, m3u8_parser: M3U8_Parser) -> bytes:
+        """
+        Fetches the encryption key from the M3U8 playlist.
+
+        Args:
+            m3u8_parser (M3U8_Parser): An instance of M3U8_Parser containing parsed M3U8 data.
+
+        Returns:
+            bytes: The decryption key in byte format.
+        """
         key_uri = urljoin(self.url, m3u8_parser.keys.get('uri'))
         parsed_url = urlparse(key_uri)
         self.key_base_url = f"{parsed_url.scheme}://{parsed_url.netloc}/"
@@ -113,6 +121,12 @@ class M3U8_Segments:
             raise Exception(f"Failed to fetch key: {e}")
     
     def parse_data(self, m3u8_content: str) -> None:
+        """
+        Parses the M3U8 content and extracts necessary data.
+
+        Args:
+            m3u8_content (str): The raw M3U8 playlist content.
+        """
         m3u8_parser = M3U8_Parser()
         m3u8_parser.parse_data(uri=self.url, raw_content=m3u8_content)
 
@@ -133,20 +147,19 @@ class M3U8_Segments:
         ]
         self.class_ts_estimator.total_segments = len(self.segments)
 
-        # Proxy
-        if THERE_IS_PROXY_LIST:
-            console.log("[red]Start validation proxy.")
-            self.valid_proxy = main_test_proxy(self.segments[0])
-            console.log(f"[cyan]N. Valid ip: [red]{len(self.valid_proxy)}")
-
-            if len(self.valid_proxy) == 0:
-                sys.exit(0)
-
     def get_info(self) -> None:
+        """
+        Retrieves M3U8 playlist information from the given URL.
+
+        If the URL is an index URL, this method:
+            - Sends an HTTP GET request to fetch the M3U8 playlist.
+            - Parses the M3U8 content using `parse_data`.
+            - Saves the playlist to a temporary folder.
+        """
         if self.is_index_url:
             try:
                 client_params = {'headers': {'User-Agent': get_userAgent()}, 'timeout': MAX_TIMEOOUT}
-                response = httpx.get(self.url, **client_params)
+                response = httpx.get(self.url, **client_params, follow_redirects=True)
                 response.raise_for_status()
                 
                 self.parse_data(response.text)
@@ -184,18 +197,13 @@ class M3U8_Segments:
         else:
             print("Signal handler must be set in the main thread")
 
-    def _get_http_client(self, index: int = None):
+    def _get_http_client(self):
         client_params = {
-            #'headers': random_headers(self.key_base_url) if hasattr(self, 'key_base_url') else {'User-Agent': get_userAgent()},
             'headers': {'User-Agent': get_userAgent()},
             'timeout': SEGMENT_MAX_TIMEOUT,
             'follow_redirects': True,
             'http2': False
         }
-        
-        if THERE_IS_PROXY_LIST and index is not None and hasattr(self, 'valid_proxy'):
-            client_params['proxies'] = self.valid_proxy[index % len(self.valid_proxy)]
-        
         return httpx.Client(**client_params)
                             
     def download_segment(self, ts_url: str, index: int, progress_bar: tqdm, backoff_factor: float = 1.1) -> None:
@@ -213,15 +221,13 @@ class M3U8_Segments:
                 return
             
             try:
-                with self._get_http_client(index) as client:
-                    start_time = time.time()
+                with self._get_http_client() as client:
                     response = client.get(ts_url)
         
                     # Validate response and content
                     response.raise_for_status()
                     segment_content = response.content
                     content_size = len(segment_content)
-                    duration = time.time() - start_time
 
                     # Decrypt if needed and verify decrypted content
                     if self.decryption is not None:
@@ -234,7 +240,7 @@ class M3U8_Segments:
                             self.stop_event.set()       # Trigger the stopping event for all threads
                             break                       # Stop the current task immediately
 
-                    self.class_ts_estimator.update_progress_bar(content_size, duration, progress_bar)
+                    self.class_ts_estimator.update_progress_bar(content_size, progress_bar)
                     self.queue.put((index, segment_content))
                     self.downloaded_segments.add(index)  
                     progress_bar.update(1)
@@ -268,9 +274,6 @@ class M3U8_Segments:
         """
         Writes segments to file with additional verification.
         """
-        buffer = {}
-        expected_index = 0
-        
         with open(self.tmp_file_path, 'wb') as f:
             while not self.stop_event.is_set() or not self.queue.empty():
                 if self.interrupt_flag.is_set():
@@ -284,28 +287,28 @@ class M3U8_Segments:
 
                     # Handle failed segments
                     if segment_content is None:
-                        if index == expected_index:
-                            expected_index += 1
+                        if index == self.expected_index:
+                            self.expected_index += 1
                         continue
 
                     # Write segment if it's the next expected one
-                    if index == expected_index:
+                    if index == self.expected_index:
                         f.write(segment_content)
                         f.flush()
-                        expected_index += 1
+                        self.expected_index += 1
 
                         # Write any buffered segments that are now in order
-                        while expected_index in buffer:
-                            next_segment = buffer.pop(expected_index)
+                        while self.expected_index in self.buffer:
+                            next_segment = self.buffer.pop(self.expected_index)
 
                             if next_segment is not None:
                                 f.write(next_segment)
                                 f.flush()
 
-                            expected_index += 1
+                            self.expected_index += 1
                     
                     else:
-                        buffer[index] = segment_content
+                        self.buffer[index] = segment_content
 
                 except queue.Empty:
                     self.current_timeout = min(MAX_TIMEOOUT, self.current_timeout * 1.1)
@@ -350,7 +353,6 @@ class M3U8_Segments:
 
             # Configure workers and delay
             max_workers = self._get_worker_count(type)
-            delay = max(PROXY_START_MIN, min(PROXY_START_MAX, 1 / (len(self.valid_proxy) + 1))) if THERE_IS_PROXY_LIST else TQDM_DELAY_WORKER
             
             # Download segments with completion verification
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -361,7 +363,7 @@ class M3U8_Segments:
                     if self.interrupt_flag.is_set():
                         break
 
-                    time.sleep(delay)
+                    time.sleep(TQDM_DELAY_WORKER)
                     futures.append(executor.submit(self.download_segment, segment_url, index, progress_bar))
 
                 # Wait for futures with interrupt handling
@@ -405,20 +407,12 @@ class M3U8_Segments:
         """
         Generate platform-appropriate progress bar format.
         """
-        if not USE_LARGE_BAR:
-            return (
-                f"{Colors.YELLOW}Proc{Colors.WHITE}: "
-                f"{Colors.RED}{{percentage:.2f}}% "
-                f"{Colors.CYAN}{{remaining}}{{postfix}} {Colors.WHITE}]"
-            )
-            
-        else:
-            return (
-                f"{Colors.YELLOW}[HLS] {Colors.WHITE}({Colors.CYAN}{description}{Colors.WHITE}): "
-                f"{Colors.RED}{{percentage:.2f}}% "
-                f"{Colors.MAGENTA}{{bar}} "
-                f"{Colors.YELLOW}{{elapsed}}{Colors.WHITE} < {Colors.CYAN}{{remaining}}{Colors.WHITE}{{postfix}}{Colors.WHITE}"
-            )
+        return (
+            f"{Colors.YELLOW}[HLS] {Colors.WHITE}({Colors.CYAN}{description}{Colors.WHITE}): "
+            f"{Colors.RED}{{percentage:.2f}}% "
+            f"{Colors.MAGENTA}{{bar}} "
+            f"{Colors.YELLOW}{{elapsed}}{Colors.WHITE} < {Colors.CYAN}{{remaining}}{Colors.WHITE}{{postfix}}{Colors.WHITE}"
+        )
     
     def _get_worker_count(self, stream_type: str) -> int:
         """
@@ -429,8 +423,6 @@ class M3U8_Segments:
             'audio': DEFAULT_AUDIO_WORKERS
         }.get(stream_type.lower(), 1)
 
-        if THERE_IS_PROXY_LIST:
-            return min(len(self.valid_proxy), base_workers * 2)
         return base_workers
     
     def _generate_results(self, stream_type: str) -> Dict:
@@ -459,6 +451,9 @@ class M3U8_Segments:
             
         if self.info_nFailed > 0:
             self._display_error_summary()
+
+        self.buffer = {}
+        self.expected_index = 0
 
     def _display_error_summary(self) -> None:
         """Generate final error report."""

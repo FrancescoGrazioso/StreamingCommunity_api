@@ -1,16 +1,16 @@
+import os
 from setuptools import setup, find_packages
 
 def read_readme():
     with open("README.md", "r", encoding="utf-8") as fh:
         return fh.read()
     
-with open("requirements.txt", "r", encoding="utf-8-sig") as f:
+with open(os.path.join(os.path.dirname(__file__), "requirements.txt"), "r", encoding="utf-8-sig") as f:
     required_packages = f.read().splitlines()
-    print(required_packages)
 
 setup(
     name="StreamingCommunity",
-    version="2.7.0",
+    version="3.0.8",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
     author="Lovi-0",

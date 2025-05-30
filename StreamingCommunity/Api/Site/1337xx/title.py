@@ -6,10 +6,10 @@ import os
 # External libraries
 import httpx
 from bs4 import BeautifulSoup
+from rich.console import Console
 
 
 # Internal utilities
-from StreamingCommunity.Util.console import console
 from StreamingCommunity.Util.os import os_manager
 from StreamingCommunity.Util.message import start_message
 from StreamingCommunity.Util.headers import get_userAgent
@@ -21,6 +21,9 @@ from StreamingCommunity.Api.Template.config_loader import site_constant
 from StreamingCommunity.Api.Template.Class.SearchType import MediaItem
 
 
+# Variable
+console = Console()
+
 
 def download_title(select_title: MediaItem):
     """
@@ -30,9 +33,8 @@ def download_title(select_title: MediaItem):
         - select_title (MediaItem): The media item to be downloaded. This should be an instance of the MediaItem class, containing attributes like `name` and `url`.
     """
     start_message()
-    console.print(f"[yellow]Download:  [red]{select_title.name} \n")
-    print() 
-
+    console.print(f"[bold yellow]Download:[/bold yellow] [red]{site_constant.SITE_NAME}[/red] → [cyan]{select_title.name}[/cyan] \n")
+    
     # Define output path
     title_name = os_manager.get_sanitize_file(select_title.name)
     mp4_path = os.path.join(site_constant.MOVIE_FOLDER, title_name.replace(".mp4", ""))
@@ -55,6 +57,5 @@ def download_title(select_title: MediaItem):
 
     # Tor manager
     manager = TOR_downloader()
-    manager.add_magnet_link(final_url)
+    manager.add_magnet_link(final_url, save_path=mp4_path)
     manager.start_download()
-    manager.move_downloaded_files(mp4_path)

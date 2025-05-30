@@ -1,16 +1,12 @@
 # 20.04.25
 
-import sys
+import re
 import logging
 
 
 # Internal utilities
 from m3u8 import loads
 from StreamingCommunity.Util.os import internet_manager
-
-
-# External libraries
-import httpx
 
 
 # Costant
@@ -79,7 +75,6 @@ class M3U8_Codec:
         Extracted codecs are set as attributes: audio_codec and video_codec.
         """
         try:
-            # Split the codecs string by comma
             codecs_list = self.codecs.split(',')
         except Exception as e:
             logging.error(f"Can't split codec list: {self.codecs} with error {e}")
@@ -407,10 +402,8 @@ class M3U8_Parser:
         Parameters:
             - m3u8_content (str): The content of the M3U8 file.
         """
-
-        # Get obj of the m3u8 text content download, dictionary with video, audio, segments, subtitles
         m3u8_obj = loads(raw_content, uri)
-
+        
         self.__parse_video_info__(m3u8_obj)
         self.__parse_subtitles_and_audio__(m3u8_obj)
         self.__parse_segments__(m3u8_obj)
@@ -425,18 +418,38 @@ class M3U8_Parser:
             - uri (str): The URI containing video information.
 
         Returns:
-            int: The video resolution if found, otherwise 0.
+            tuple: The video resolution (width, height) if found, otherwise (0, 0).
         """
-
         # Log
         logging.info(f"Try extract resolution from: {uri}")
-
+        
+        # First try: Check for known resolutions
         for resolution in RESOLUTIONS:
             if "http" in str(uri):
                 if str(resolution[1]) in uri:
                     return resolution
-            
-        # Default resolution return (not best)
+        
+        # Pattern to match common resolution formats like 854x480, 1280x720, etc.
+        resolution_patterns = [
+            r'(\d+)x(\d+)',  # Match format: 854x480
+            r'(\d+)p',       # Match format: 480p, 720p, etc.
+            r'_(\d+)x(\d+)'  # Match format: _854x480
+        ]
+        
+        for pattern in resolution_patterns:
+            matches = re.findall(pattern, uri)
+            if matches:
+                if len(matches[0]) == 2:  # Format like 854x480
+                    width, height = int(matches[0][0]), int(matches[0][1])
+                    return (width, height)
+                
+                elif len(matches[0]) == 1:  # Format like 480p
+                    height = int(matches[0])
+
+                    # Estimate width based on common aspect ratios (16:9)
+                    width = int(height * 16 / 9)
+                    return (width, height)
+        
         logging.warning("No resolution found with custom parsing.")
         return (0, 0)
 
@@ -469,7 +482,6 @@ class M3U8_Parser:
         Parameters:
             - m3u8_obj: The M3U8 object containing video playlists.
         """
-
         try:
             for playlist in m3u8_obj.playlists:
 
@@ -511,25 +523,35 @@ class M3U8_Parser:
         except Exception as e:
             logging.error(f"Error parsing video info: {e}")
 
-    def __parse_encryption_keys__(self, m3u8_obj) -> None:
+    def __parse_encryption_keys__(self, obj) -> None:
         """
-        Extracts encryption keys from the M3U8 object.
+        Extracts encryption keys either from the M3U8 object or from individual segments.
 
         Parameters:
-            - m3u8_obj: The M3U8 object containing encryption keys.
+            - obj: Either the main M3U8 object or an individual segment.
         """
         try:
-            if m3u8_obj.key is not None:
+            if hasattr(obj, 'key') and obj.key is not None:
+                key_info = {
+                    'method': obj.key.method,
+                    'iv': obj.key.iv,
+                    'uri': obj.key.uri
+                }
+                
                 if self.keys is None:
-                    self.keys = {
-                        'method': m3u8_obj.key.method,
-                        'iv': m3u8_obj.key.iv,
-                        'uri': m3u8_obj.key.uri
-                    }
+                    self.keys = key_info
+
+                """
+                elif obj.key.uri not in self.keys:
+                    if isinstance(self.keys, dict):
+                        self.keys[obj.key.uri] = key_info
+                    else:
+                        old_key = self.keys
+                        self.keys = {'default': old_key, obj.key.uri: key_info}
+                """
 
         except Exception as e:
             logging.error(f"Error parsing encryption keys: {e}")
-            sys.exit(0)
             pass
 
     def __parse_subtitles_and_audio__(self, m3u8_obj) -> None:
@@ -569,7 +591,6 @@ class M3U8_Parser:
         Parameters:
             - m3u8_obj: The M3U8 object containing segment data.
         """
-
         try:
             for segment in m3u8_obj.segments:
 
@@ -583,6 +604,10 @@ class M3U8_Parser:
                     self.segments.append(segment.uri)
                 else:
                     self.subtitle.append(segment.uri)
+            
+            # Second check if there is key in main m3u8 obj
+            if self.keys is None:
+                self.__parse_encryption_keys__(m3u8_obj)
 
         except Exception as e:
             logging.error(f"Error parsing segments: {e}")
@@ -606,13 +631,6 @@ class M3U8_Parser:
         Returns:
             - formatted_duration (str): Formatted duration string with hours, minutes, and seconds if return_string is True.
             - duration_dict (dict): Dictionary with keys 'h', 'm', 's' representing hours, minutes, and seconds respectively if return_string is False.
-
-        Example usage:
-        >>> obj = YourClass(duration=3661)
-        >>> obj.get_duration()
-        '[yellow]1[red]h [yellow]1[red]m [yellow]1[red]s'
-        >>> obj.get_duration(return_string=False)
-        {'h': 1, 'm': 1, 's': 1}
         """
 
         # Calculate hours, minutes, and remaining seconds

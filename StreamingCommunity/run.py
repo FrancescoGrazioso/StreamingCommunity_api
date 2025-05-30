@@ -12,25 +12,31 @@ import threading, asyncio
 from typing import Callable
 
 
+# External library
+from rich.console import Console
+from rich.prompt import Prompt
+
+
 # Internal utilities
+from .global_search import global_search
 from StreamingCommunity.Util.message import start_message
-from StreamingCommunity.Util.console import console, msg
-from StreamingCommunity.Util._jsonConfig import config_manager
-from StreamingCommunity.Util.os import os_summary
+from StreamingCommunity.Util.config_json import config_manager
+from StreamingCommunity.Util.os import os_summary, internet_manager
 from StreamingCommunity.Util.logger import Logger
 from StreamingCommunity.Upload.update import update as git_update
 from StreamingCommunity.Lib.TMBD import tmdb
-
-
-# Telegram util
 from StreamingCommunity.TelegramHelp.telegram_bot import get_bot_instance, TelegramSession
 
 
 # Config
 SHOW_TRENDING = config_manager.get_bool('DEFAULT', 'show_trending')
-CLOSE_CONSOLE = config_manager.get_bool('DEFAULT', 'not_close')
+NOT_CLOSE_CONSOLE = config_manager.get_bool('DEFAULT', 'not_close')
 TELEGRAM_BOT = config_manager.get_bool('DEFAULT', 'telegram_bot')
 
+
+# Variable
+console = Console()
+msg = Prompt()
 
 
 def run_function(func: Callable[..., None], close_console: bool = False, search_terms: str = None) -> None:
@@ -49,12 +55,13 @@ def run_function(func: Callable[..., None], close_console: bool = False, search_
         func(search_terms)
 
 
+# !!! DA METTERE IN COMUNE CON QUELLA DI GLOBAL
 def load_search_functions():
     modules = []
     loaded_functions = {}
 
     # Lista dei siti da escludere se TELEGRAM_BOT è attivo
-    excluded_sites = {"cb01new", "ddlstreamitaly", "guardaserie", "ilcorsaronero", "mostraguarda"} if TELEGRAM_BOT else set()
+    excluded_sites = {"cb01new", "guardaserie", "ilcorsaronero", "mostraguarda"} if TELEGRAM_BOT else set()
 
     # Find api home directory
     if getattr(sys, 'frozen', False):  # Modalità PyInstaller
@@ -82,11 +89,10 @@ def load_search_functions():
             mod = importlib.import_module(f'StreamingCommunity.Api.Site.{module_name}')
 
             # Get 'indice' from the module
-            indice = getattr(mod, 'indice', 0)
-            is_deprecate = bool(getattr(mod, '_deprecate', True))
-            use_for = getattr(mod, '_useFor', 'other')
+            indice = getattr(mod, 'indice')
+            use_for = getattr(mod, '_useFor')
 
-            if not is_deprecate:
+            if not getattr(mod, '_deprecate'):
                 modules.append((module_name, indice, use_for))
 
         except Exception as e:
@@ -149,7 +155,7 @@ def initialize():
 
 def restart_script():
     """Riavvia lo script con gli stessi argomenti della riga di comando."""
-    print("\n🔄 Riavvio dello script...\n")
+    print("\nRiavvio dello script...\n")
     python = sys.executable
     os.execv(python, [python] + sys.argv)
 
@@ -157,45 +163,64 @@ def restart_script():
 def force_exit():
     """Forza la chiusura dello script in qualsiasi contesto."""
 
-    print("\n🛑 Chiusura dello script in corso...")
+    print("\nChiusura dello script in corso...")
 
-    # 1️⃣ Chiudi tutti i thread tranne il principale
+    # 1 Chiudi tutti i thread tranne il principale
     for t in threading.enumerate():
         if t is not threading.main_thread():
-            print(f"🔄 Chiusura thread: {t.name}")
+            print(f"Chiusura thread: {t.name}")
             t.join(timeout=1)
 
-    # 2️⃣ Ferma asyncio, se attivo
+    # 2 Ferma asyncio, se attivo
     try:
         loop = asyncio.get_event_loop()
         if loop.is_running():
-            print("⚡ Arresto del loop asyncio...")
+            print("Arresto del loop asyncio...")
             loop.stop()
     except RuntimeError:
         pass
 
-    # 3️⃣ Esce con sys.exit(), se fallisce usa os._exit()
+    # 3 Esce con sys.exit(), se fallisce usa os._exit()
     try:
-        print("✅ Uscita con sys.exit(0)")
+        print("Uscita con sys.exit(0)")
         sys.exit(0)
     except SystemExit:
         pass
 
-    print("🚨 Uscita forzata con os._exit(0)")
+    print("Uscita forzata con os._exit(0)")
     os._exit(0)
 
 
 def main(script_id = 0):
 
+    color_map = {
+        "anime": "red",
+        "film_&_serie": "yellow",
+        "serie": "blue",
+        "torrent": "white"
+    }
+
     if TELEGRAM_BOT:
         bot = get_bot_instance()
-        bot.send_message(f"🏁 Avviato script {script_id}", None)
+        bot.send_message(f"Avviato script {script_id}", None)
 
     start = time.time()
 
     # Create logger
     log_not = Logger()
     initialize()
+    
+    if not internet_manager.check_dns_provider():
+        print()
+        console.print("[red]❌ ERROR: DNS configuration is required!")
+        console.print("[red]The program cannot function correctly without proper DNS settings.")
+        console.print("[yellow]Please configure one of these DNS servers:")
+        console.print("[blue]• Cloudflare (1.1.1.1) 'https://developers.cloudflare.com/1.1.1.1/setup/windows/'")
+        console.print("[blue]• Quad9 (9.9.9.9) 'https://docs.quad9.net/Setup_Guides/Windows/Windows_10/'")
+        console.print("\n[yellow]⚠️ The program will not work until you configure your DNS settings.")
+
+        time.sleep(2)        
+        msg.ask("[yellow]Press Enter to continue ...")
 
     # Load search functions
     search_functions = load_search_functions()
@@ -211,9 +236,6 @@ def main(script_id = 0):
     # Add arguments for the main configuration parameters
     parser.add_argument(
         '--add_siteName', type=bool, help='Enable or disable adding the site name to the file name (e.g., true/false).'
-    )
-    parser.add_argument(
-        '--disable_searchDomain', type=bool, help='Enable or disable searching in configured domains (e.g., true/false).'
     )
     parser.add_argument(
         '--not_close', type=bool, help='If set to true, the script will not close the console after execution (e.g., true/false).'
@@ -235,22 +257,14 @@ def main(script_id = 0):
         '--specific_list_subtitles', type=str, help='Comma-separated list of specific subtitle languages to download (e.g., eng,spa).'
     )
 
+    # Add global search option
+    parser.add_argument(
+        '--global', action='store_true', help='Perform a global search across multiple sites.'
+    )
+
     # Add arguments for search functions
-    color_map = {
-        "anime": "red",
-        "film_serie": "yellow",
-        "film": "blue",
-        "serie": "green",
-        "other": "white"
-    }
-
-    # Add dynamic arguments based on loaded search modules
-    for alias, (_, use_for) in search_functions.items():
-        short_option = alias[:3].upper()
-        long_option = alias
-        parser.add_argument(f'-{short_option}', f'--{long_option}', action='store_true', help=f'Search for {alias.split("_")[0]} on streaming platforms.')
-
     parser.add_argument('-s', '--search', default=None, help='Search terms')
+    
     # Parse command-line arguments
     args = parser.parse_args()
 
@@ -260,8 +274,6 @@ def main(script_id = 0):
 
     if args.add_siteName is not None:
         config_updates['DEFAULT.add_siteName'] = args.add_siteName
-    if args.disable_searchDomain is not None:
-        config_updates['DEFAULT.disable_searchDomain'] = args.disable_searchDomain
     if args.not_close is not None:
         config_updates['DEFAULT.not_close'] = args.not_close
     if args.default_video_worker is not None:
@@ -278,60 +290,52 @@ def main(script_id = 0):
         section, option = key.split('.')
         config_manager.set_key(section, option, value)
 
-    config_manager.write_config()
+    config_manager.save_config()
 
-    # Map command-line arguments to functions
-    arg_to_function = {alias: func for alias, (func, _) in search_functions.items()}
+    # Check if global search is requested
+    if getattr(args, 'global'):
+        global_search(search_terms)
+        return
 
-    # Check which argument is provided and run the corresponding function
-    for arg, func in arg_to_function.items():
-        if getattr(args, arg):
-            run_function(func, search_terms=search_terms)
-            return
+    # Create mappings using module indice
+    input_to_function = {}
+    choice_labels = {}
+    
+    for alias, (func, use_for) in search_functions.items():
+        module_name = alias.split("_")[0]
+        try:
+            mod = importlib.import_module(f'StreamingCommunity.Api.Site.{module_name}')
+            site_index = str(getattr(mod, 'indice'))
+            input_to_function[site_index] = func
+            choice_labels[site_index] = (module_name.capitalize(), use_for.lower())
+        except Exception as e:
+            console.print(f"[red]Error mapping module {module_name}: {str(e)}")
 
-    # Mapping user input to functions
-    input_to_function = {str(i): func for i, (alias, (func, _)) in enumerate(search_functions.items())}
-
-    # Create dynamic prompt message and choices
-    choice_labels = {str(i): (alias.split("_")[0].capitalize(), use_for) for i, (alias, (_, use_for)) in enumerate(search_functions.items())}
-
-    # Display the category legend in a single line
+    # Display the category legend
     legend_text = " | ".join([f"[{color}]{category.capitalize()}[/{color}]" for category, color in color_map.items()])
     console.print(f"\n[bold green]Category Legend:[/bold green] {legend_text}")
 
-    # Construct the prompt message with color-coded site names
+    # Construct prompt with proper color mapping
     prompt_message = "[green]Insert category [white](" + ", ".join(
-        [f"{key}: [{color_map[label[1]]}]{label[0]}[/{color_map[label[1]]}]" for key, label in choice_labels.items()]
+        [f"[{color_map.get(label[1], 'white')}]{key}: {label[0]}[/{color_map.get(label[1], 'white')}]" 
+         for key, label in choice_labels.items()]
     ) + "[white])"
 
     if TELEGRAM_BOT:
-
-        # Mappa delle emoji per i colori
-        emoji_map = {
-            "yellow": "🟡",  # Giallo
-            "red": "🔴",     # Rosso
-            "blue": "🔵",    # Blu
-            "green": "🟢"    # Verde
-        }
-
-        # Display the category legend in a single line
         category_legend_str = "Categorie: \n" + " | ".join([
-            f"{emoji_map.get(color, '⚪')} {category.capitalize()}"
-            for category, color in color_map.items()
+            f"{category.capitalize()}" for category in color_map.keys()
         ])
 
-        # Costruisci il messaggio con le emoji al posto dei colori
         prompt_message = "Inserisci il sito:\n" + "\n".join(
-            [f"{key}: {emoji_map[color_map[label[1]]]} {label[0]}" for key, label in choice_labels.items()]
+            [f"{key}: {label[0]}" for key, label in choice_labels.items()]
         )
 
         console.print(f"\n{prompt_message}")
 
-        # Chiedi la scelta all'utente con il bot Telegram
         category = bot.ask(
             "select_provider",
             f"{category_legend_str}\n\n{prompt_message}",
-            None  # Passiamo la lista delle chiavi come scelte
+            None
         )
 
     else:
@@ -339,18 +343,19 @@ def main(script_id = 0):
 
     # Run the corresponding function based on user input
     if category in input_to_function:
-        run_function(input_to_function[category], search_terms = args.search)
+        run_function(input_to_function[category], search_terms=search_terms)
+        
     else:
-
         if TELEGRAM_BOT:
             bot.send_message(f"Categoria non valida", None)
 
         console.print("[red]Invalid category.")
 
-        if CLOSE_CONSOLE:
-            restart_script()  # Riavvia lo script invece di uscire
+        if NOT_CLOSE_CONSOLE:
+            restart_script()
+
         else:
-            force_exit()  # Usa la funzione per chiudere sempre
+            force_exit()
 
             if TELEGRAM_BOT:
                 bot.send_message(f"Chiusura in corso", None)

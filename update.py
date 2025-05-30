@@ -16,7 +16,7 @@ from rich.table import Table
 
 
 # Variable
-max_timeout = 20
+max_timeout = 15
 console = Console()
 local_path = os.path.join(".")
 from StreamingCommunity.Upload.version import __author__, __title__
@@ -115,6 +115,7 @@ def print_commit_info(commit_info: dict):
     
     # Print the table in a panel
     console.print(Panel.fit(table))
+
 
 def download_and_extract_latest_commit():
     """

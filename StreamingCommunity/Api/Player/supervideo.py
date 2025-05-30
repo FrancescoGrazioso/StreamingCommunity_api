@@ -11,12 +11,12 @@ from bs4 import BeautifulSoup
 
 
 # Internal utilities
-from StreamingCommunity.Util._jsonConfig import config_manager
-from StreamingCommunity.Util.headers import get_userAgent
+from StreamingCommunity.Util.config_json import config_manager
+from StreamingCommunity.Util.headers import get_headers
 
 
 # Variable
-max_timeout = config_manager.get_int("REQUESTS", "timeout")
+MAX_TIMEOUT = config_manager.get_int("REQUESTS", "timeout")
 
 
 class VideoSource:
@@ -27,11 +27,7 @@ class VideoSource:
         Attributes:
             - url (str): The URL of the video source.
         """
-        self.headers = {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-            'accept-language': 'it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7',
-            'User-Agent': get_userAgent()
-        }
+        self.headers = get_headers()
         self.client = httpx.Client()
         self.url = url
 
@@ -45,40 +41,15 @@ class VideoSource:
         Returns:
             - str: The response content if successful, None otherwise.
         """
-
         try:
-            response = self.client.get(
-                url=url, 
-                headers=self.headers, 
-                follow_redirects=True, 
-                timeout=max_timeout
-            )
+            response = self.client.get(url, headers=self.headers, timeout=MAX_TIMEOUT, follow_redirects=True)
             response.raise_for_status()
             return response.text
         
         except Exception as e:
             logging.error(f"Request failed: {e}")
             return None
-
-    def parse_html(self, html_content: str) -> BeautifulSoup:
-        """
-        Parse the provided HTML content using BeautifulSoup.
-
-        Parameters:
-            - html_content (str): The HTML content to parse.
-
-        Returns:
-            - BeautifulSoup: Parsed HTML content if successful, None otherwise.
-        """
-
-        try:
-            soup = BeautifulSoup(html_content, "html.parser")
-            return soup
-        
-        except Exception as e:
-            logging.error(f"Failed to parse HTML content: {e}")
-            return None
-        
+ 
     def get_iframe(self, soup):
         """
         Extracts the source URL of the second iframe in the provided BeautifulSoup object.
@@ -91,7 +62,7 @@ class VideoSource:
         """
         iframes = soup.find_all("iframe")
         if iframes and len(iframes) > 1:
-            return iframes[1].get("src")
+            return iframes[0].get("src") or iframes[0].get("data-src")
         
         return None
 
@@ -107,7 +78,7 @@ class VideoSource:
         """
         content = self.make_request(url)
         if content:
-            return self.parse_html(content)
+            return BeautifulSoup(content, "html.parser")
         
         return None
         
@@ -140,23 +111,20 @@ class VideoSource:
                 logging.error("Failed to fetch HTML content.")
                 return None
 
-            soup = self.parse_html(html_content)
-            if not soup:
-                logging.error("Failed to parse HTML content.")
-                return None
-
             # Find master playlist
-            data_js = self.get_result_node_js(soup)
+            data_js = self.get_result_node_js(BeautifulSoup(html_content, "html.parser"))
 
             if data_js is not None:
                 match = re.search(r'sources:\s*\[\{\s*file:\s*"([^"]+)"', data_js)
 
                 if match:
                     return match.group(1)
+                else:
+                    logging.error("Failed to find M3U8 URL: No match found")
                     
             else:
 
-                iframe_src = self.get_iframe(soup)
+                iframe_src = self.get_iframe(BeautifulSoup(html_content, "html.parser"))
                 if not iframe_src:
                     logging.error("No iframe found.")
                     return None
@@ -185,10 +153,11 @@ class VideoSource:
 
                 if match:
                     return match.group(1)
+                else:
+                    logging.error("Failed to find M3U8 URL: No match found")
             
             return None
 
         except Exception as e:
             logging.error(f"An error occurred: {e}")
             return None
-        

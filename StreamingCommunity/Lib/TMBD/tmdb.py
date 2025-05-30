@@ -6,20 +6,20 @@ from typing import Dict
 
 # External libraries
 import httpx
+from rich.console import Console
 
 
 # Internal utilities
 from .obj_tmbd import Json_film
-from StreamingCommunity.Util.console import console
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 from StreamingCommunity.Util.table import TVShowManager
 
 
 # Variable
+console = Console()
 table_show_manager = TVShowManager()
 api_key = "a800ed6c93274fb857ea61bd9e7256c5"
 MAX_TIMEOUT = config_manager.get_int("REQUESTS", "timeout")
-
 
 
 def get_select_title(table_show_manager, generic_obj):
@@ -29,11 +29,6 @@ def get_select_title(table_show_manager, generic_obj):
     Returns:
         dict: The selected media item.
     """
-
-    # Set up table for displaying titles
-    table_show_manager.set_slice_end(10)
-
-    # Check if the generic_obj list is empty
     if not generic_obj:
         console.print("\n[red]No media items available.")
         return None
@@ -78,7 +73,7 @@ def get_select_title(table_show_manager, generic_obj):
 
     # Handle user's quit command
     if last_command == "q" or last_command == "quit":
-        console.print("\n[red]Quit [white]...")
+        console.print("\n[red]Quit ...")
         sys.exit(0)
 
     # Check if the selected index is within range
@@ -158,7 +153,7 @@ class TheMovieDB:
         
         # Join with colored arrows and print with proper category label
         console.print(
-            f"[bold purple]{category}:[/] {' [red]→[/] '.join(colored_items)}"
+            f"[bold purple]{category}:[/] {' [red]->[/] '.join(colored_items)}"
         )
 
     def display_trending_tv_shows(self):

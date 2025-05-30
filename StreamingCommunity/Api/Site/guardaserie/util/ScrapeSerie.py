@@ -11,7 +11,7 @@ from bs4 import BeautifulSoup
 
 # Internal utilities
 from StreamingCommunity.Util.headers import get_userAgent
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 
 
 # Logic class
@@ -105,3 +105,29 @@ class GetSerieInfo:
             logging.error(f"Error parsing HTML page: {e}")
 
         return []
+
+
+    # ------------- FOR GUI -------------
+    def getNumberSeason(self) -> int:
+        """
+        Get the total number of seasons available for the series.
+        """
+        return self.get_seasons_number()
+    
+    def getEpisodeSeasons(self, season_number: int) -> list:
+        """
+        Get all episodes for a specific season.
+        """
+        episodes = self.get_episode_number(season_number)
+        return episodes
+        
+    def selectEpisode(self, season_number: int, episode_index: int) -> dict:
+        """
+        Get information for a specific episode in a specific season.
+        """
+        episodes = self.getEpisodeSeasons(season_number)
+        if not episodes or episode_index < 0 or episode_index >= len(episodes):
+            logging.error(f"Episode index {episode_index} is out of range for season {season_number}")
+            return None
+            
+        return episodes[episode_index]

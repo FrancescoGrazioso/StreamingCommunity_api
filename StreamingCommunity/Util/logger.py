@@ -6,57 +6,87 @@ from logging.handlers import RotatingFileHandler
 
 
 # Internal utilities
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 
 
 class Logger:
+    _instance = None
+    
+    def __new__(cls):
+        # Singleton pattern to avoid multiple logger instances
+        if cls._instance is None:
+            cls._instance = super(Logger, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+        
     def __init__(self):
-
-        # Fetching configuration values
-        self.DEBUG_MODE = config_manager.get_bool("DEFAULT", "debug")
-        self.log_to_file = config_manager.get_bool("DEFAULT", "log_to_file")
-        self.log_file = config_manager.get("DEFAULT", "log_file") if self.log_to_file else None
-
+        # Initialize only once
+        if getattr(self, '_initialized', False):
+            return
+        
+        # Fetch only the debug setting from config
+        self.debug_mode = config_manager.get_bool("DEFAULT", "debug")
+        
+        # Configure root logger
+        self.logger = logging.getLogger('')
+        
+        # Remove any existing handlers to avoid duplication
+        for handler in self.logger.handlers[:]:
+            self.logger.removeHandler(handler)
+        
+        # Reduce logging level for external libraries
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logging.getLogger("httpcore").setLevel(logging.WARNING)
-
         
-        # Setting logging level based on DEBUG_MODE
-        if self.DEBUG_MODE:
-            logging.getLogger('root').setLevel(logging.DEBUG)
+        # Set logging level based on debug_mode
+        if self.debug_mode:
+            self.logger.setLevel(logging.DEBUG)
+            self._configure_console_log_file()
 
-            # Configure file logging if debug mode and logging to file are both enabled
-            if self.log_to_file:
-                self.remove_existing_log_file()
-                self.configure_file_logging()
         else:
-
-            # If DEBUG_MODE is False, set logging level to ERROR
-            logging.getLogger('root').setLevel(logging.ERROR)
-
-        # Configure console logging
-        self.configure_logging()
-
-    def configure_logging(self):
-        """
-        Configure console logging.
-        """
-        logging.basicConfig(level=logging.DEBUG, format='[%(filename)s:%(lineno)s - %(funcName)20s() ] %(asctime)s - %(levelname)s - %(message)s')
-
-    def configure_file_logging(self):
-        """
-        Configure file logging if enabled.
-        """
-
-        file_handler = RotatingFileHandler(self.log_file, maxBytes=10*1024*1024, backupCount=5)
-        file_handler.setLevel(logging.DEBUG)
+            self.logger.setLevel(logging.ERROR)
+        
+        # Configure console logging (terminal output) regardless of debug mode
+        self._configure_console_logging()
+        
+        self._initialized = True
+        
+    def _configure_console_logging(self):
+        """Configure console logging output to terminal."""
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.DEBUG if self.debug_mode else logging.ERROR)
         formatter = logging.Formatter('[%(filename)s:%(lineno)s - %(funcName)20s() ] %(asctime)s - %(levelname)s - %(message)s')
-        file_handler.setFormatter(formatter)
-        logging.getLogger('').addHandler(file_handler)
-
-    def remove_existing_log_file(self):
+        console_handler.setFormatter(formatter)
+        self.logger.addHandler(console_handler)
+            
+    def _configure_console_log_file(self):
+        """Create a console.log file only when debug mode is enabled."""
+        console_log_path = "console.log"
+        try:
+            # Remove existing file if present
+            if os.path.exists(console_log_path):
+                os.remove(console_log_path)
+                
+            # Create handler for console.log
+            console_file_handler = RotatingFileHandler(
+                console_log_path,
+                maxBytes=5*1024*1024,  # 5 MB
+                backupCount=3
+            )
+            console_file_handler.setLevel(logging.DEBUG)
+            formatter = logging.Formatter('[%(filename)s:%(lineno)s - %(funcName)20s() ] %(asctime)s - %(levelname)s - %(message)s')
+            console_file_handler.setFormatter(formatter)
+            self.logger.addHandler(console_file_handler)
+            
+        except Exception as e:
+            print(f"Error creating console.log: {e}")
+            
+    @staticmethod
+    def get_logger(name=None):
         """
-        Remove the log file if it already exists.
+        Get a specific logger for a module/component.
+        If name is None, returns the root logger.
         """
-        if os.path.exists(self.log_file):
-            os.remove(self.log_file)
+        # Ensure Logger instance is initialized
+        Logger()
+        return logging.getLogger(name)

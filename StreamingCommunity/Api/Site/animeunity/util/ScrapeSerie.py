@@ -9,7 +9,7 @@ import httpx
 
 # Internal utilities
 from StreamingCommunity.Util.headers import get_userAgent
-from StreamingCommunity.Util._jsonConfig import config_manager
+from StreamingCommunity.Util.config_json import config_manager
 from StreamingCommunity.Api.Player.Helper.Vixcloud.util import EpisodeManager, Episode
 
 
@@ -29,6 +29,7 @@ class ScrapeSerieAnime:
         self.is_series = False
         self.headers = {'user-agent': get_userAgent()}
         self.url = url
+        self.episodes_cache = None
 
     def setup(self, version: str = None, media_id: int = None, series_name: str = None):
         self.version = version
@@ -42,55 +43,81 @@ class ScrapeSerieAnime:
     def get_count_episodes(self):
         """
         Retrieve total number of episodes for the selected media.
+        This includes partial episodes (like episode 6.5).
         
         Returns:
-            int: Total episode count
+            int: Total episode count including partial episodes
+        """
+        if self.episodes_cache is None:
+            self._fetch_all_episodes()
+            
+        if self.episodes_cache:
+            return len(self.episodes_cache)
+        return None
+    
+    def _fetch_all_episodes(self):
+        """
+        Fetch all episodes data at once and cache it
         """
         try:
-
+            # Get initial episode count
             response = httpx.get(
-                url=f"{self.url}/info_api/{self.media_id}/", 
-                headers=self.headers, 
+                url=f"{self.url}/info_api/{self.media_id}/",
+                headers=self.headers,
                 timeout=max_timeout
             )
             response.raise_for_status()
-
-            # Parse JSON response and return episode count
-            return response.json()["episodes_count"]
-        
+            initial_count = response.json()["episodes_count"]
+            
+            all_episodes = []
+            start_range = 1
+            
+            # Fetch episodes in chunks
+            while start_range <= initial_count:
+                end_range = min(start_range + 119, initial_count)
+                
+                response = httpx.get(
+                    url=f"{self.url}/info_api/{self.media_id}/1",
+                    params={
+                        "start_range": start_range,
+                        "end_range": end_range
+                    },
+                    headers=self.headers,
+                    timeout=max_timeout
+                )
+                response.raise_for_status()
+                
+                chunk_episodes = response.json().get("episodes", [])
+                all_episodes.extend(chunk_episodes)
+                start_range = end_range + 1
+            
+            self.episodes_cache = all_episodes
         except Exception as e:
-            logging.error(f"Error fetching episode count: {e}")
-            return None
-    
+            logging.error(f"Error fetching all episodes: {e}")
+            self.episodes_cache = None
+
     def get_info_episode(self, index_ep: int) -> Episode:
         """
-        Fetch detailed information for a specific episode.
-        
-        Args:
-            index_ep (int): Zero-based index of the target episode
-        
-        Returns:
-            Episode: Detailed episode information
+        Get episode info from cache
         """
-        try:
+        if self.episodes_cache is None:
+            self._fetch_all_episodes()
+            
+        if self.episodes_cache and 0 <= index_ep < len(self.episodes_cache):
+            return Episode(self.episodes_cache[index_ep])
+        return None
 
-            params = {
-                "start_range": index_ep, 
-                "end_range": index_ep + 1
-            }
 
-            response = httpx.get(
-                url=f"{self.url}/info_api/{self.media_id}/{index_ep}", 
-                headers=self.headers, 
-                params=params, 
-                timeout=max_timeout
-            )
-            response.raise_for_status()
-
-            # Return information about the episode
-            json_data = response.json()["episodes"][-1]
-            return Episode(json_data)
+    # ------------- FOR GUI -------------
+    def getNumberSeason(self) -> int:
+        """
+        Get the total number of seasons available for the anime.
+        Note: AnimeUnity typically doesn't have seasons, so returns 1.
+        """
+        return 1
         
-        except Exception as e:
-            logging.error(f"Error fetching episode information: {e}")
-            return None
+    def selectEpisode(self, season_number: int = 1, episode_index: int = 0) -> Episode:
+        """
+        Get information for a specific episode.
+        """
+        return self.get_info_episode(episode_index)
