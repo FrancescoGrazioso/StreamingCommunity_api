@@ -814,9 +814,6 @@ Addon per Stremio che consente lo streaming HTTPS di film, serie, anime e TV in 
 ### 🧩 [streamingcommunity-unofficialapi](https://github.com/Blu-Tiger/streamingcommunity-unofficialapi)
 API non ufficiale per accedere ai contenuti del sito italiano StreamingCommunity.
 
-### 🎥 [stream-buddy](https://github.com/Bbalduzz/stream-buddy)
-Tool per guardare o scaricare film dalla piattaforma StreamingCommunity.
-
 # Disclaimer
 
 This software is provided "as is", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose, and noninfringement. In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort, or otherwise, arising from, out of, or in connection with the software or the use or other dealings in the software.

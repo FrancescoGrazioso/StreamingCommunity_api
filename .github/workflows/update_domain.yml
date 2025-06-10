@@ -1,5 +1,4 @@
-name: Update domains
-
+name: Update domains (Amend Strategy)
 on:
   schedule:
     - cron: "0 7-21 * * *"
@@ -8,22 +7,25 @@ on:
 jobs:
   update-domains:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+        with:
+          fetch-depth: 0  # Serve per l'amend
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'      
-          
+          python-version: '3.12'
+
       - name: Install dependencies
         run: |
           pip install httpx tldextract ua-generator dnspython
-
           pip install --upgrade pip setuptools wheel
 
       - name: Configure DNS
@@ -33,18 +35,24 @@ jobs:
 
       - name: Execute domain update script
         run: python .github/.domain/domain_update.py
-
-      - name: Commit and push changes (if any)
+      
+      - name: Always amend last commit
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # Check if domains.json was modified
           if ! git diff --quiet .github/.domain/domains.json; then
+            echo "📝 Changes detected - amending last commit"
             git add .github/.domain/domains.json
-            git commit -m "Automatic domain update [skip ci]"
-            echo "Changes committed. Attempting to push..."
-            git push
+            git commit --amend --no-edit
+            git push --force-with-lease origin main
           else
-            echo "No changes to .github/.domain/domains.json to commit."
+            echo "✅ No changes to domains.json"
           fi
+      
+      - name: Verify repository state
+        if: failure()
+        run: |
+          echo "❌ Something went wrong. Repository state:"
+          git log --oneline -5
+          git status
