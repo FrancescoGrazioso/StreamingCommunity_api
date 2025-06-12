@@ -139,9 +139,9 @@ class RunTab(QTabWidget):
 
         site_index = self.site_combo.currentIndex()
         if site_index >= 0:
-            site_text = sites[site_index]["flag"]
-            site_name = site_text.split()[0].upper()
-            args.append(f"-{site_name}")
+            # Usa il nome completo del sito invece della flag abbreviata
+            site_name = sites[site_index]["name"].lower()
+            args.extend(["--site", site_name])
 
         self.output_text.clear()
         print(f"Avvio script con argomenti: {' '.join(args)}")
