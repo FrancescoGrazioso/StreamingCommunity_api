@@ -118,13 +118,16 @@ class RunTab(QTabWidget):
 
     def toggle_console(self, state):
         self.output_text.setVisible(state == Qt.Checked)
-        self.results_table.setVisible(state == Qt.Checked)
+        # Don't hide the results table when toggling the console
+        if state == Qt.Checked:
+            self.results_table.setVisible(True)
 
     def run_script(self):
         if self.process is not None and self.process.state() == QProcess.Running:
             print("Script già in esecuzione.")
             return
 
+        # Reset all state variables when starting a new search
         self.current_context = None
         self.selected_season = None
         self.buffer = ""
@@ -177,11 +180,23 @@ class RunTab(QTabWidget):
             )
 
         if "Episodes find:" in self.buffer:
-            self.results_table.hide()
-            self.current_context = "episodes"
-            text_to_show = f"Trovati {self.buffer.split('Episodes find:')[1].split()[0]} episodi!"
-            self.status_label.setText(text_to_show)
-            self.status_label.show()
+            # If we've selected a season and we're now seeing episodes, update the table with episode data
+            if self.selected_season is not None:
+                # Check if we have a table to display
+                if (("┏" in self.buffer or "┌" in self.buffer) and
+                        ("┗" in self.buffer or "┛" in self.buffer or "└" in self.buffer)):
+                    self.parse_and_show_results(self.buffer)
+                    self.status_label.hide()
+                else:
+                    # We're still waiting for the table data
+                    self.status_label.setText("Caricamento episodi...")
+                    self.status_label.show()
+            else:
+                self.results_table.hide()
+                self.current_context = "episodes"
+                text_to_show = f"Trovati {self.buffer.split('Episodes find:')[1].split()[0]} episodi!"
+                self.status_label.setText(text_to_show)
+                self.status_label.show()
         elif (("┏" in self.buffer or "┌" in self.buffer) and
                 ("┗" in self.buffer or "┛" in self.buffer or "└" in self.buffer)) or "Seasons found:" in self.buffer:
             self.parse_and_show_results(self.buffer)
@@ -199,6 +214,12 @@ class RunTab(QTabWidget):
             self.status_label.hide()
             num_seasons = int(text.split("Seasons found:")[1].split()[0])
             self.results_table.update_with_seasons(num_seasons)
+            return
+
+        # If we've selected a season and we're now seeing episodes, don't update the table with search results
+        # But only if we don't have a table to display yet
+        if self.selected_season is not None and "Episodes find:" in text and not (("┏" in text or "┌" in text) and
+                ("┗" in text or "┛" in text or "└" in text)):
             return
 
         if ("┏━━━━━━━┳" in text or "┌───────┬" in text) and "└───────┴" in text:
@@ -222,6 +243,8 @@ class RunTab(QTabWidget):
                     cells = [cell.strip() for cell in line.split("│")[1:-1]]
                     rows.append(cells)
 
+            # Make sure we're showing the table
+            self.results_table.setVisible(True)
             self.results_table.update_with_results(headers, rows)
 
     def send_input(self):
@@ -235,6 +258,8 @@ class RunTab(QTabWidget):
                 self.results_table.hide()
             else:
                 self.selected_season = user_input
+                # Clear the buffer to ensure we don't mix old data with new episode data
+                self.buffer = ""
 
         elif self.current_context == "episodes":
             if "-" in user_input or user_input == "*":
@@ -262,6 +287,8 @@ class RunTab(QTabWidget):
         self.input_field.hide()
         self.send_button.hide()
         self.status_label.hide()
+        # Reset selected_season when the process finishes
+        self.selected_season = None
         print("Script terminato.")
 
     def update_output(self, text):
