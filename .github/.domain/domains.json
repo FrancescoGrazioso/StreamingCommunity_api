@@ -6,10 +6,10 @@
     "time_change": "2025-03-19 12:20:19"
   },
   "cb01new": {
-    "domain": "live",
-    "full_url": "https://cb01net.live/",
-    "old_domain": "digital",
-    "time_change": "2025-06-11 07:05:05"
+    "domain": "rest",
+    "full_url": "https://cb01net.rest/",
+    "old_domain": "live",
+    "time_change": "2025-06-20 09:04:57"
   },
   "animeunity": {
     "domain": "so",
