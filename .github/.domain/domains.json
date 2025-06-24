@@ -42,10 +42,10 @@
     "time_change": "2025-04-29 12:30:30"
   },
   "altadefinizione": {
-    "domain": "spa",
-    "full_url": "https://altadefinizione.spa/",
-    "old_domain": "locker",
-    "time_change": "2025-05-26 23:22:45"
+    "domain": "blog",
+    "full_url": "https://altadefinizionegratis.blog/",
+    "old_domain": "spa",
+    "time_change": "2025-06-24 19:04:20"
   },
   "streamingcommunity": {
     "domain": "shop",
@@ -54,9 +54,9 @@
     "time_change": "2025-06-19 19:03:55"
   },
   "altadefinizionegratis": {
-    "domain": "vip",
-    "full_url": "https://altadefinizionegratis.vip/",
-    "old_domain": "club",
-    "time_change": "2025-06-20 21:04:33"
+    "domain": "blog",
+    "full_url": "https://altadefinizionegratis.blog/",
+    "old_domain": "vip",
+    "time_change": "2025-06-24 19:04:23"
   }
 }
