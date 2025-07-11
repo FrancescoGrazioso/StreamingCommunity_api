@@ -1,9 +1,9 @@
 {
   "1337xx": {
     "domain": "to",
-    "full_url": "https://www.1337xx.to/",
+    "full_url": "http://1337xx.to/",
     "old_domain": "to",
-    "time_change": "2025-03-19 12:20:19"
+    "time_change": "2025-07-11 19:04:08"
   },
   "cb01new": {
     "domain": "click",
@@ -13,9 +13,9 @@
   },
   "animeunity": {
     "domain": "so",
-    "full_url": "http://animeunity.so/",
+    "full_url": "https://www.animeunity.so/",
     "old_domain": "so",
-    "time_change": "2025-07-04 16:05:22"
+    "time_change": "2025-07-11 19:04:10"
   },
   "animeworld": {
     "domain": "ac",
@@ -43,9 +43,9 @@
   },
   "altadefinizione": {
     "domain": "city",
-    "full_url": "https://altadefinizionegratis.city/",
+    "full_url": "http://altadefinizionegratis.city/",
     "old_domain": "life",
-    "time_change": "2025-07-07 17:04:51"
+    "time_change": "2025-07-11 19:04:14"
   },
   "streamingcommunity": {
     "domain": "life",
@@ -55,8 +55,8 @@
   },
   "altadefinizionegratis": {
     "domain": "city",
-    "full_url": "https://altadefinizionegratis.city/",
+    "full_url": "http://altadefinizionegratis.city/",
     "old_domain": "life",
-    "time_change": "2025-07-07 17:04:52"
+    "time_change": "2025-07-11 19:04:14"
   }
 }
